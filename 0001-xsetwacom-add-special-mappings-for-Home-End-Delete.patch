@@ -1,0 +1,31 @@
+From 915a64589f34a0593fe55afa82de30c4415c3020 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Mon, 29 Apr 2013 14:14:43 +1000
+Subject: [PATCH] xsetwacom: add special mappings for Home, End, Delete
+
+These three are likely written as home, end, del, so let's try to
+understand that.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+---
+ tools/xsetwacom.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/tools/xsetwacom.c b/tools/xsetwacom.c
+index aea2243..d475947 100644
+--- a/tools/xsetwacom.c
++++ b/tools/xsetwacom.c
+@@ -570,6 +570,9 @@ static struct modifier specialkeys[] = {
+ 
+ 	{"PgUp", "Prior"}, {"PgDn", "Next"},
+ 
++	{"del", "Delete"}, {"home", "Home"},
++	{"end", "End"},
++
+ 	{ NULL, NULL }
+ };
+ 
+-- 
+1.8.2.1
+

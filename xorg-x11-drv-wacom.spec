@@ -9,7 +9,7 @@
 Summary:    Xorg X11 wacom input driver
 Name:       xorg-x11-drv-wacom
 Version:    0.16.1
-Release:    3%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Release:    4%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:        http://www.x.org
 License:    GPLv2+
 Group:      User Interface/X Hardware Support
@@ -27,6 +27,12 @@ Source0: http://prdownloads.sourceforge.net/linuxwacom/xf86-input-wacom-%{versio
 Patch001: 0001-Fix-double-free-in-wcmPreInitParseOptions.patch
 # Bug 859851 - Hovering the Expresskeys on Intuos5 causes spurious stylus jump to (0,0)
 Patch002: 0002-Ignore-out-of-prox-events-from-unknown-devices-alrea.patch
+
+# Bug 920385 - Unable to map the esc key using xsetwacom.
+Patch003: 0001-xsetwacom-add-special-mappings-for-Home-End-Delete.patch
+Patch004: 0002-xsetwacom-if-we-fail-to-map-a-string-try-as-special-.patch
+Patch005: 0003-xsetwacom-map-a-bunch-of-special-symbols.patch
+Patch006: 0004-Have-keysym_to_keycode-handle-unused-keycodes.patch
 
 ExcludeArch: s390 s390x
 
@@ -52,6 +58,10 @@ X.Org X11 wacom input driver for Wacom tablets.
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
 %patch001 -p1
 %patch002 -p1
+%patch003 -p1
+%patch004 -p1
+%patch005 -p1
+%patch006 -p1
 
 %build
 autoreconf --force -v --install || exit 1
@@ -110,6 +120,9 @@ X.Org X11 wacom input driver development files.
 %{_bindir}/isdv4-serial-debugger
 
 %changelog
+* Mon Jul 01 2013 Peter Hutterer <peter.hutterer@redhat.com> 0.16.1-4
+- Add support for more special symbols to xsetwacom (#920385)
+
 * Thu Nov 01 2012 Peter Hutterer <peter.hutterer@redhat.com> - 0.16.1-3
 - Fix {?dist} tag (#871448)
 

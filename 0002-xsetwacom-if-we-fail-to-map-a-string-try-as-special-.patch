@@ -1,0 +1,38 @@
+From e50725269dd76c4a3c92c84dd4413034a8937df0 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Mon, 29 Apr 2013 14:46:18 +1000
+Subject: [PATCH] xsetwacom: if we fail to map a string, try as special key or
+ warn
+
+If a string comes back with a KeySym of 0, try again as a special key. And
+if that fails too, print a warning.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+---
+ tools/xsetwacom.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/tools/xsetwacom.c b/tools/xsetwacom.c
+index d475947..69b5486 100644
+--- a/tools/xsetwacom.c
++++ b/tools/xsetwacom.c
+@@ -1078,7 +1078,15 @@ static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned
+ 		} else
+ 			need_press = need_release = 1;
+ 
++
+ 		ks = XStringToKeysym(key);
++		if (ks == 0) {
++			key = convert_specialkey(key);
++			ks = XStringToKeysym(key);
++			if (ks == 0)
++				fprintf(stderr, "Warning: unable to map '%s' to a keycode.\n", key);
++		}
++
+ 		kc = keysym_to_keycode(dpy, ks);
+ 
+ 		if (need_press)
+-- 
+1.8.2.1
+
