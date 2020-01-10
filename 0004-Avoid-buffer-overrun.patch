@@ -1,0 +1,26 @@
+From 710137568ef58af2aea47a35a25e5691ce778de9 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 21 Mar 2012 15:34:06 +1000
+Subject: [PATCH 4/6] Avoid buffer overrun
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmUSB.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index 096943e..d41ced6 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -370,7 +370,7 @@ static Bool usbWcmInit(InputInfoPtr pInfo, char* id, float *version)
+ 		/* If mouse buttons detected but no mouse tool
+ 		 * then they must be associated with pad buttons.
+ 		 */
+-		for (i = ARRAY_SIZE(mouse_codes); i > 0; i--)
++		for (i = ARRAY_SIZE(mouse_codes) - 1; i > 0; i--)
+ 			if (ISBITSET(common->wcmKeys, mouse_codes[i]))
+ 				break;
+ 
+-- 
+1.7.7.6
+

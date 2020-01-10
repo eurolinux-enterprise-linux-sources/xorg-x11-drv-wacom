@@ -1,0 +1,30 @@
+From ea44871a40be1479a46cb761749c2c652e28dbb3 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Tue, 10 Jan 2012 11:55:14 +1000
+Subject: [PATCH] Fix wrong check for configdir
+
+We care about configdir, not sysconfigdir. Otherwise, --with-config-dir=""
+on a server that does support xorg.conf.d has no effect and the fdi files do
+not get installed.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ configure.ac |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 82a851a..4f268a0 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -101,7 +101,7 @@ AC_ARG_WITH([xorg-conf-dir],
+             [configdir="$withval"],
+             [configdir="$sysconfigdir"])
+ AC_SUBST(configdir)
+-AM_CONDITIONAL(HAS_XORG_CONF_DIR, [test "x$sysconfigdir" != "x"])
++AM_CONDITIONAL(HAS_XORG_CONF_DIR, [test "x$configdir" != "x"])
+ 
+ AC_ARG_ENABLE(unit-tests, AS_HELP_STRING([--enable-unit-tests],
+                           [Enable unit-tests (default: auto)]),
+-- 
+1.7.7.5
+

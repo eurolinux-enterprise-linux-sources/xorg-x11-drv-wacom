@@ -1,0 +1,34 @@
+From d63a39a11ecd04b381dd1a68272aa9559921f90d Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 21 Mar 2012 15:29:56 +1000
+Subject: [PATCH 2/6] Fix broken NULL check
+
+This check was ok until 7958bb9b1ddef9e8238615fd1b3d15996f00effe, when more
+code was moved here and it made no sense this way anymore. Change it to
+return early in the case of NULL allocation.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmCommon.c |    5 +++--
+ 1 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/wcmCommon.c b/src/wcmCommon.c
+index e8c1209..7199105 100644
+--- a/src/wcmCommon.c
++++ b/src/wcmCommon.c
+@@ -1450,9 +1450,10 @@ WacomCommonPtr wcmNewCommon(void)
+ {
+ 	WacomCommonPtr common;
+ 	common = calloc(1, sizeof(WacomCommonRec));
+-	if (common)
+-		common->refcnt = 1;
++	if (!common)
++		return NULL;;
+ 
++	common->refcnt = 1;
+ 	common->wcmFlags = 0;               /* various flags */
+ 	common->wcmProtocolLevel = WCM_PROTOCOL_4; /* protocol level */
+ 	common->wcmTPCButton = 0;          /* set Tablet PC button on/off */
+-- 
+1.7.7.6
+

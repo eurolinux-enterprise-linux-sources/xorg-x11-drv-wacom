@@ -1,0 +1,167 @@
+From c98a4a709f22bfdd858a8073dbcb60337fc8481d Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 22 Feb 2012 16:52:52 +1000
+Subject: [PATCH] Export current tool ID in the property too
+
+Previously, we exported old serial number, old tool ID and current serial
+number. Export the current tool ID as well.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+Tested-by: Bastien Nocera <hadess@hadess.net>
+---
+ include/wacom-properties.h |    6 ++++--
+ src/wcmCommon.c            |    6 +++---
+ src/wcmXCommand.c          |   16 ++++++++++------
+ src/xf86Wacom.h            |    2 +-
+ src/xf86WacomDefs.h        |    1 +
+ 5 files changed, 19 insertions(+), 12 deletions(-)
+
+diff --git a/include/wacom-properties.h b/include/wacom-properties.h
+index 0bb84b1..2bb86ab 100644
+--- a/include/wacom-properties.h
++++ b/include/wacom-properties.h
+@@ -33,8 +33,10 @@
+ /* 32 bit, 4 values */
+ #define WACOM_PROP_PRESSURECURVE "Wacom Pressurecurve"
+ 
+-/* CARD32, 4 values, tablet id, old serial, old hw device id, current serial
+-   read-only */
++/* CARD32, 4 values, tablet id, old serial, old hw device id,
++   current serial, current device id
++   read-only
++ */
+ #define WACOM_PROP_SERIALIDS "Wacom Serial IDs"
+ 
+ /* CARD32, 1 value */
+diff --git a/src/wcmCommon.c b/src/wcmCommon.c
+index 11340ea..65b0390 100644
+--- a/src/wcmCommon.c
++++ b/src/wcmCommon.c
+@@ -730,8 +730,8 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
+ 		return;
+ 	}
+ 
+-	if (priv->cur_serial != serial)
+-		wcmUpdateSerial(pInfo, serial);
++	if (priv->cur_serial != serial || priv->cur_device_id != id)
++		wcmUpdateSerial(pInfo, serial, id);
+ 
+ 	/* don't move the cursor when going out-prox */
+ 	if (!ds->proximity)
+@@ -833,7 +833,7 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
+ 		priv->devReverseCount = 0;
+ 		priv->old_serial = serial;
+ 		priv->old_device_id = id;
+-		wcmUpdateSerial(pInfo, 0);
++		wcmUpdateSerial(pInfo, 0, 0);
+ 	}
+ }
+ 
+diff --git a/src/wcmXCommand.c b/src/wcmXCommand.c
+index 0fd5664..57b3f20 100644
+--- a/src/wcmXCommand.c
++++ b/src/wcmXCommand.c
+@@ -190,7 +190,8 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
+ 	values[1] = priv->old_serial;
+ 	values[2] = priv->old_device_id;
+ 	values[3] = priv->cur_serial;
+-	prop_serials = InitWcmAtom(pInfo->dev, WACOM_PROP_SERIALIDS, XA_INTEGER, 32, 4, values);
++	values[4] = priv->cur_device_id;
++	prop_serials = InitWcmAtom(pInfo->dev, WACOM_PROP_SERIALIDS, XA_INTEGER, 32, 5, values);
+ 
+ 	values[0] = priv->serial;
+ 	prop_serial_binding = InitWcmAtom(pInfo->dev, WACOM_PROP_SERIAL_BIND, XA_INTEGER, 32, 1, values);
+@@ -718,7 +719,7 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
+ 		 * set it at runtime. If we get here from wcmUpdateSerial,
+ 		 * we know the serial has ben set internally already, so we
+ 		 * can reply with success. */
+-		if (prop->size == 4 && prop->format == 32)
++		if (prop->size == 5 && prop->format == 32)
+ 			if (((CARD32*)prop->data)[3] == priv->cur_serial)
+ 				return Success;
+ 
+@@ -875,11 +876,12 @@ int wcmGetProperty (DeviceIntPtr dev, Atom property)
+ 		values[1] = priv->old_serial;
+ 		values[2] = priv->old_device_id;
+ 		values[3] = priv->cur_serial;
++		values[4] = priv->cur_device_id;
+ 
+ 		DBG(10, priv, "Update to serial: %d\n", priv->old_serial);
+ 
+ 		return XIChangeDeviceProperty(dev, property, XA_INTEGER, 32,
+-					      PropModeReplace, 4,
++					      PropModeReplace, 5,
+ 					      values, FALSE);
+ 	}
+ 
+@@ -892,14 +894,14 @@ serialTimerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
+ 	InputInfoPtr pInfo = arg;
+ 	WacomDevicePtr priv = pInfo->private;
+ 	XIPropertyValuePtr prop;
+-	CARD32 prop_value[4];
++	CARD32 prop_value[5];
+ 	int sigstate;
+ 	int rc;
+ 
+ 	sigstate = xf86BlockSIGIO();
+ 
+ 	rc = XIGetDeviceProperty(pInfo->dev, prop_serials, &prop);
+-	if (rc != Success || prop->format != 32 || prop->size != 4)
++	if (rc != Success || prop->format != 32 || prop->size != 5)
+ 	{
+ 		xf86Msg(X_ERROR, "%s: Failed to update serial number.\n",
+ 			pInfo->name);
+@@ -908,6 +910,7 @@ serialTimerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
+ 
+ 	memcpy(prop_value, prop->data, sizeof(prop_value));
+ 	prop_value[3] = priv->cur_serial;
++	prop_value[4] = priv->cur_device_id;
+ 
+ 	XIChangeDeviceProperty(pInfo->dev, prop_serials, XA_INTEGER,
+ 			       prop->format, PropModeReplace,
+@@ -919,7 +922,7 @@ serialTimerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
+ }
+ 
+ void
+-wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial)
++wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial, int id)
+ {
+ 	WacomDevicePtr priv = pInfo->private;
+ 
+@@ -927,6 +930,7 @@ wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial)
+ 		return;
+ 
+ 	priv->cur_serial = serial;
++	priv->cur_device_id = id;
+ 
+ 	/* This function is called during SIGIO. Schedule timer for property
+ 	 * event delivery outside of signal handler. */
+diff --git a/src/xf86Wacom.h b/src/xf86Wacom.h
+index fc1b4f4..677dfd3 100644
+--- a/src/xf86Wacom.h
++++ b/src/xf86Wacom.h
+@@ -169,7 +169,7 @@ extern int wcmGetProperty(DeviceIntPtr dev, Atom property);
+ extern int wcmDeleteProperty(DeviceIntPtr dev, Atom property);
+ extern void InitWcmDeviceProperties(InputInfoPtr pInfo);
+ extern void wcmUpdateRotationProperty(WacomDevicePtr priv);
+-extern void wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial);
++extern void wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial, int id);
+ 
+ /* Utility functions */
+ extern Bool is_absolute(InputInfoPtr pInfo);
+diff --git a/src/xf86WacomDefs.h b/src/xf86WacomDefs.h
+index ef425f5..01aa4d4 100644
+--- a/src/xf86WacomDefs.h
++++ b/src/xf86WacomDefs.h
+@@ -226,6 +226,7 @@ struct _WacomDeviceRec
+ 	double factorY;		/* Y factor */
+ 	unsigned int serial;	/* device serial number this device takes (if 0, any serial is ok) */
+ 	unsigned int cur_serial; /* current serial in prox */
++	int cur_device_id;	/* current device ID in prox */
+ 	int maxWidth;		/* max active screen width in screen coords */
+ 	int maxHeight;		/* max active screen height in screen coords */
+ 	int leftPadding;	/* left padding for virtual tablet in device coordinates*/
+-- 
+1.7.7.6
+

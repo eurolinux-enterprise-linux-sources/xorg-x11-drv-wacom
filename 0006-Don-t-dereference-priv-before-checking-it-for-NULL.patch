@@ -1,0 +1,32 @@
+From 4328e2b222a45ba206f9232d667dafa89557fc65 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 21 Mar 2012 15:36:47 +1000
+Subject: [PATCH 6/6] Don't dereference priv before checking it for NULL
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmConfig.c |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletions(-)
+
+diff --git a/src/wcmConfig.c b/src/wcmConfig.c
+index 5920e11..7a4cfde 100644
+--- a/src/wcmConfig.c
++++ b/src/wcmConfig.c
+@@ -225,11 +225,13 @@ static void wcmUninit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
+ 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
+ 	WacomDevicePtr dev;
+ 	WacomDevicePtr *prev;
+-	WacomCommonPtr common = priv->common;
++	WacomCommonPtr common;
+ 
+ 	if (!priv)
+ 		goto out;
+ 
++	common = priv->common;
++
+ 	DBG(1, priv, "\n");
+ 
+ 	/* Server 1.10 will UnInit all devices for us */
+-- 
+1.7.7.6
+
