@@ -1,6 +1,6 @@
 /*
  * Copyright 1995-2002 by Frederic Lepied, France. <Lepied@XFree86.org>
- * Copyright 2002-2010 by Ping Cheng, Wacom. <pingc@wacom.com>
+ * Copyright 2002-2013 by Ping Cheng, Wacom. <pingc@wacom.com>
  *                                                                            
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -32,12 +32,10 @@
 
 typedef struct {
 	int wcmLastToolSerial;
-	int wcmBTNChannel;
 	int wcmDeviceType;
 	Bool wcmPenTouch;
 	Bool wcmUseMT;
 	int wcmMTChannel;
-	int wcmPrevChannel;
 	int wcmEventCnt;
 	struct input_event wcmEvents[MAX_USB_EVENTS];
 	int nbuttons;                /* total number of buttons */
@@ -61,7 +59,7 @@ static void usbParseEvent(InputInfoPtr pInfo,
 static void usbParseSynEvent(InputInfoPtr pInfo,
 			     const struct input_event *event);
 static void usbDispatchEvents(InputInfoPtr pInfo);
-static int usbChooseChannel(WacomCommonPtr common);
+static int usbChooseChannel(WacomCommonPtr common, int device_type, unsigned int serial);
 
 	WacomDeviceClass gWacomUSBDevice =
 	{
@@ -99,6 +97,7 @@ DEFINE_MODEL(usbIntuos2,	"USB Intuos2",		5);
 DEFINE_MODEL(usbIntuos3,	"USB Intuos3",		5);
 DEFINE_MODEL(usbIntuos4,	"USB Intuos4",		5);
 DEFINE_MODEL(usbIntuos5,	"USB Intuos5",		5);
+DEFINE_MODEL(usbIntuosPro,	"USB Intuos Pro",	5);
 DEFINE_MODEL(usbVolito,		"USB Volito",		4);
 DEFINE_MODEL(usbVolito2,	"USB Volito2",		4);
 DEFINE_MODEL(usbCintiqV5,	"USB CintiqV5",		5);
@@ -138,16 +137,17 @@ usbStart(InputInfoPtr pInfo)
 {
 	int err;
 
-#ifdef EVIOCGRAB
-	/* Try to grab the event device so that data don't leak to /dev/input/mice */
-	SYSCALL(err = ioctl(pInfo->fd, EVIOCGRAB, (pointer)1));
+	if (xf86CheckBoolOption(pInfo->options, "GrabDevice", 0))
+	{
+		/* Try to grab the event device so that data don't leak to /dev/input/mice */
+		SYSCALL(err = ioctl(pInfo->fd, EVIOCGRAB, (pointer)1));
 
-	/* this is called for all tools, so all but the first one fails with
-	 * EBUSY */
-	if (err < 0 && errno != EBUSY)
-		xf86Msg(X_ERROR, "%s: Wacom X driver can't grab event device (%s)\n",
+		/* this is called for all tools, so all but the first one fails with
+		 * EBUSY */
+		if (err < 0 && errno != EBUSY)
+			xf86Msg(X_ERROR, "%s: Wacom X driver can't grab event device (%s)\n",
 				pInfo->name, strerror(errno));
-#endif
+	}
 	return Success;
 }
 
@@ -173,160 +173,217 @@ static unsigned short mouse_codes [] = {
 	BTN_SIDE, BTN_EXTRA
 };
 
-static struct
+static struct WacomModelDesc
 {
 	const unsigned int vendor_id;
 	const unsigned int model_id;
 	int yRes; /* tablet Y resolution in units/meter */
 	int xRes; /* tablet X resolution in units/meter */
 	WacomModelPtr model;
+	const char *name;
 } WacomModelDesc [] =
 {
-	{ WACOM_VENDOR_ID, 0x00,  39370,  39370, &usbPenPartner }, /* PenPartner */
-	{ WACOM_VENDOR_ID, 0x10,  80000,  80000, &usbGraphire   }, /* Graphire */
-	{ WACOM_VENDOR_ID, 0x11,  80000,  80000, &usbGraphire2  }, /* Graphire2 4x5 */
-	{ WACOM_VENDOR_ID, 0x12,  80000,  80000, &usbGraphire2  }, /* Graphire2 5x7 */
-	{ WACOM_VENDOR_ID, 0x13,  80000,  80000, &usbGraphire3  }, /* Graphire3 4x5 */
-	{ WACOM_VENDOR_ID, 0x14,  80000,  80000, &usbGraphire3  }, /* Graphire3 6x8 */
-	{ WACOM_VENDOR_ID, 0x15,  80000,  80000, &usbGraphire4  }, /* Graphire4 4x5 */
-	{ WACOM_VENDOR_ID, 0x16,  80000,  80000, &usbGraphire4  }, /* Graphire4 6x8 */
-	{ WACOM_VENDOR_ID, 0x17, 100000, 100000, &usbBambooFun  }, /* BambooFun 4x5 */
-	{ WACOM_VENDOR_ID, 0x18, 100000, 100000, &usbBambooFun  }, /* BambooFun 6x8 */
-	{ WACOM_VENDOR_ID, 0x19,  80000,  80000, &usbBamboo1    }, /* Bamboo1 Medium*/
-	{ WACOM_VENDOR_ID, 0x81,  80000,  80000, &usbGraphire4  }, /* Graphire4 6x8 BlueTooth */
+	{ WACOM_VENDOR_ID, 0x00,  39370,  39370, &usbPenPartner, "PenPartner"		},
+	{ WACOM_VENDOR_ID, 0x10,  80000,  80000, &usbGraphire,   "Graphire"		},
+	{ WACOM_VENDOR_ID, 0x11,  80000,  80000, &usbGraphire2,  "Graphire2 4x5"	},
+	{ WACOM_VENDOR_ID, 0x12,  80000,  80000, &usbGraphire2,  "Graphire2 5x7"	},
+	{ WACOM_VENDOR_ID, 0x13,  80000,  80000, &usbGraphire3,  "Graphire3 4x5"	},
+	{ WACOM_VENDOR_ID, 0x14,  80000,  80000, &usbGraphire3,  "Graphire3 6x8"	},
+	{ WACOM_VENDOR_ID, 0x15,  80000,  80000, &usbGraphire4,  "Graphire4 4x5"	},
+	{ WACOM_VENDOR_ID, 0x16,  80000,  80000, &usbGraphire4,  "Graphire4 6x8"	},
+	{ WACOM_VENDOR_ID, 0x17, 100000, 100000, &usbBambooFun,  "BambooFun 4x5"	},
+	{ WACOM_VENDOR_ID, 0x18, 100000, 100000, &usbBambooFun,  "BambooFun 6x8"	},
+	{ WACOM_VENDOR_ID, 0x19,  80000,  80000, &usbBamboo1,    "Bamboo1 Medium"	},
+	{ WACOM_VENDOR_ID, 0x81,  80000,  80000, &usbGraphire4,  "Graphire4 6x8 BlueTooth" },
 
-	{ WACOM_VENDOR_ID, 0xD1, 100000, 100000, &usbBamboo     }, /* CTL-460 */
-	{ WACOM_VENDOR_ID, 0xD4, 100000, 100000, &usbBamboo     }, /* CTH-461 */
-	{ WACOM_VENDOR_ID, 0xD3, 100000, 100000, &usbBamboo     }, /* CTL-660 */
-	{ WACOM_VENDOR_ID, 0xD2, 100000, 100000, &usbBamboo     }, /* CTL-461/S */
-	{ WACOM_VENDOR_ID, 0xD0, 100000, 100000, &usbBamboo     }, /* Bamboo Touch */
-	{ WACOM_VENDOR_ID, 0xD6, 100000, 100000, &usbBamboo     }, /* CTH-460/K */
-	{ WACOM_VENDOR_ID, 0xD7, 100000, 100000, &usbBamboo     }, /* CTH-461/S */
-	{ WACOM_VENDOR_ID, 0xD8, 100000, 100000, &usbBamboo     }, /* CTH-661/S1 */
-	{ WACOM_VENDOR_ID, 0xDA, 100000, 100000, &usbBamboo     }, /* CTH-461/L */
-	{ WACOM_VENDOR_ID, 0xDB, 100000, 100000, &usbBamboo     }, /* CTH-661/L */
+	{ WACOM_VENDOR_ID, 0xD1, 100000, 100000, &usbBamboo,     "CTL-460"		},
+	{ WACOM_VENDOR_ID, 0xD4, 100000, 100000, &usbBamboo,     "CTH-461"		},
+	{ WACOM_VENDOR_ID, 0xD3, 100000, 100000, &usbBamboo,     "CTL-660"		},
+	{ WACOM_VENDOR_ID, 0xD2, 100000, 100000, &usbBamboo,     "CTL-461/S"		},
+	{ WACOM_VENDOR_ID, 0xD0, 100000, 100000, &usbBamboo,     "Bamboo Touch"		},
+	{ WACOM_VENDOR_ID, 0xD6, 100000, 100000, &usbBamboo,     "CTH-460/K"		},
+	{ WACOM_VENDOR_ID, 0xD7, 100000, 100000, &usbBamboo,     "CTH-461/S"		},
+	{ WACOM_VENDOR_ID, 0xD8, 100000, 100000, &usbBamboo,     "CTH-661/S1"		},
+	{ WACOM_VENDOR_ID, 0xDA, 100000, 100000, &usbBamboo,     "CTH-461/L"		},
+	{ WACOM_VENDOR_ID, 0xDB, 100000, 100000, &usbBamboo,     "CTH-661/L"		},
 
-	{ WACOM_VENDOR_ID, 0x20, 100000, 100000, &usbIntuos     }, /* Intuos 4x5 */
-	{ WACOM_VENDOR_ID, 0x21, 100000, 100000, &usbIntuos     }, /* Intuos 6x8 */
-	{ WACOM_VENDOR_ID, 0x22, 100000, 100000, &usbIntuos     }, /* Intuos 9x12 */
-	{ WACOM_VENDOR_ID, 0x23, 100000, 100000, &usbIntuos     }, /* Intuos 12x12 */
-	{ WACOM_VENDOR_ID, 0x24, 100000, 100000, &usbIntuos     }, /* Intuos 12x18 */
+	{ WACOM_VENDOR_ID, 0x20, 100000, 100000, &usbIntuos,     "Intuos 4x5"		},
+	{ WACOM_VENDOR_ID, 0x21, 100000, 100000, &usbIntuos,     "Intuos 6x8"		},
+	{ WACOM_VENDOR_ID, 0x22, 100000, 100000, &usbIntuos,     "Intuos 9x12"		},
+	{ WACOM_VENDOR_ID, 0x23, 100000, 100000, &usbIntuos,     "Intuos 12x12"		},
+	{ WACOM_VENDOR_ID, 0x24, 100000, 100000, &usbIntuos,     "Intuos 12x18"		},
 
-	{ WACOM_VENDOR_ID, 0x03,  20000,  20000, &usbCintiqPartner }, /* PTU600 */
+	{ WACOM_VENDOR_ID, 0x03,  20000,  20000, &usbCintiqPartner, "PTU600"		},
 
-	{ WACOM_VENDOR_ID, 0x30,  20000,  20000, &usbCintiq     }, /* PL400 */
-	{ WACOM_VENDOR_ID, 0x31,  20000,  20000, &usbCintiq     }, /* PL500 */
-	{ WACOM_VENDOR_ID, 0x32,  20000,  20000, &usbCintiq     }, /* PL600 */
-	{ WACOM_VENDOR_ID, 0x33,  20000,  20000, &usbCintiq     }, /* PL600SX */
-	{ WACOM_VENDOR_ID, 0x34,  20000,  20000, &usbCintiq     }, /* PL550 */
-	{ WACOM_VENDOR_ID, 0x35,  20000,  20000, &usbCintiq     }, /* PL800 */
-	{ WACOM_VENDOR_ID, 0x37,  20000,  20000, &usbCintiq     }, /* PL700 */
-	{ WACOM_VENDOR_ID, 0x38,  20000,  20000, &usbCintiq     }, /* PL510 */
-	{ WACOM_VENDOR_ID, 0x39,  20000,  20000, &usbCintiq     }, /* PL710 */
-	{ WACOM_VENDOR_ID, 0x3A,  20000,  20000, &usbCintiq     }, /* DTI520 */
-	{ WACOM_VENDOR_ID, 0xC0,  20000,  20000, &usbCintiq     }, /* DTF720 */
-	{ WACOM_VENDOR_ID, 0xC2,  20000,  20000, &usbCintiq     }, /* DTF720a */
-	{ WACOM_VENDOR_ID, 0xC4,  20000,  20000, &usbCintiq     }, /* DTF521 */
-	{ WACOM_VENDOR_ID, 0xC7, 100000, 100000, &usbCintiq     }, /* DTU1931 */
-	{ WACOM_VENDOR_ID, 0xCE, 100000, 100000, &usbCintiq     }, /* DTU2231 */
-	{ WACOM_VENDOR_ID, 0xF0, 100000, 100000, &usbCintiq     }, /* DTU1631 */
+	{ WACOM_VENDOR_ID, 0x30,  20000,  20000, &usbCintiq,     "PL400"		},
+	{ WACOM_VENDOR_ID, 0x31,  20000,  20000, &usbCintiq,     "PL500"		},
+	{ WACOM_VENDOR_ID, 0x32,  20000,  20000, &usbCintiq,     "PL600"		},
+	{ WACOM_VENDOR_ID, 0x33,  20000,  20000, &usbCintiq,     "PL600SX"		},
+	{ WACOM_VENDOR_ID, 0x34,  20000,  20000, &usbCintiq,     "PL550"		},
+	{ WACOM_VENDOR_ID, 0x35,  20000,  20000, &usbCintiq,     "PL800"		},
+	{ WACOM_VENDOR_ID, 0x37,  20000,  20000, &usbCintiq,     "PL700"		},
+	{ WACOM_VENDOR_ID, 0x38,  20000,  20000, &usbCintiq,     "PL510"		},
+	{ WACOM_VENDOR_ID, 0x39,  20000,  20000, &usbCintiq,     "PL710"		},
+	{ WACOM_VENDOR_ID, 0x3A,  20000,  20000, &usbCintiq,     "DTI520"		},
+	{ WACOM_VENDOR_ID, 0xC0,  20000,  20000, &usbCintiq,     "DTF720"		},
+	{ WACOM_VENDOR_ID, 0xC2,  20000,  20000, &usbCintiq,     "DTF720a"		},
+	{ WACOM_VENDOR_ID, 0xC4,  20000,  20000, &usbCintiq,     "DTF521"		},
+	{ WACOM_VENDOR_ID, 0xC7, 100000, 100000, &usbCintiq,     "DTU1931"		},
+	{ WACOM_VENDOR_ID, 0xCE, 100000, 100000, &usbCintiq,     "DTU2231"		},
+	{ WACOM_VENDOR_ID, 0xF0, 100000, 100000, &usbCintiq,     "DTU1631"		},
 
-	{ WACOM_VENDOR_ID, 0x41, 100000, 100000, &usbIntuos2    }, /* Intuos2 4x5 */
-	{ WACOM_VENDOR_ID, 0x42, 100000, 100000, &usbIntuos2    }, /* Intuos2 6x8 */
-	{ WACOM_VENDOR_ID, 0x43, 100000, 100000, &usbIntuos2    }, /* Intuos2 9x12 */
-	{ WACOM_VENDOR_ID, 0x44, 100000, 100000, &usbIntuos2    }, /* Intuos2 12x12 */
-	{ WACOM_VENDOR_ID, 0x45, 100000, 100000, &usbIntuos2    }, /* Intuos2 12x18 */
-	{ WACOM_VENDOR_ID, 0x47, 100000, 100000, &usbIntuos2    }, /* Intuos2 6x8  */
+	{ WACOM_VENDOR_ID, 0x41, 100000, 100000, &usbIntuos2,    "Intuos2 4x5"		},
+	{ WACOM_VENDOR_ID, 0x42, 100000, 100000, &usbIntuos2,    "Intuos2 6x8"		},
+	{ WACOM_VENDOR_ID, 0x43, 100000, 100000, &usbIntuos2,    "Intuos2 9x12"		},
+	{ WACOM_VENDOR_ID, 0x44, 100000, 100000, &usbIntuos2,    "Intuos2 12x12"	},
+	{ WACOM_VENDOR_ID, 0x45, 100000, 100000, &usbIntuos2,    "Intuos2 12x18"	},
+	{ WACOM_VENDOR_ID, 0x47, 100000, 100000, &usbIntuos2,    "Intuos2 6x8 "		},
 
-	{ WACOM_VENDOR_ID, 0x60,  50000,  50000, &usbVolito     }, /* Volito */
+	{ WACOM_VENDOR_ID, 0x60,  50000,  50000, &usbVolito,     "Volito"		},
 
-	{ WACOM_VENDOR_ID, 0x61,  50000,  50000, &usbVolito2    }, /* PenStation */
-	{ WACOM_VENDOR_ID, 0x62,  50000,  50000, &usbVolito2    }, /* Volito2 4x5 */
-	{ WACOM_VENDOR_ID, 0x63,  50000,  50000, &usbVolito2    }, /* Volito2 2x3 */
-	{ WACOM_VENDOR_ID, 0x64,  50000,  50000, &usbVolito2    }, /* PenPartner2 */
+	{ WACOM_VENDOR_ID, 0x61,  50000,  50000, &usbVolito2,    "PenStation"		},
+	{ WACOM_VENDOR_ID, 0x62,  50000,  50000, &usbVolito2,    "Volito2 4x5"		},
+	{ WACOM_VENDOR_ID, 0x63,  50000,  50000, &usbVolito2,    "Volito2 2x3"		},
+	{ WACOM_VENDOR_ID, 0x64,  50000,  50000, &usbVolito2,    "PenPartner2"		},
 
-	{ WACOM_VENDOR_ID, 0x65, 100000, 100000, &usbBamboo     }, /* Bamboo */
-	{ WACOM_VENDOR_ID, 0x69,  39842,  39842, &usbBamboo1    }, /* Bamboo1 */
-	{ WACOM_VENDOR_ID, 0x6A, 100000, 100000, &usbBamboo1    }, /* Bamboo1 4x6 */
-	{ WACOM_VENDOR_ID, 0x6B, 100000, 100000, &usbBamboo1    }, /* Bamboo1 5x8 */
+	{ WACOM_VENDOR_ID, 0x65, 100000, 100000, &usbBamboo,     "Bamboo"		},
+	{ WACOM_VENDOR_ID, 0x69,  39842,  39842, &usbBamboo1,    "Bamboo1"		},
+	{ WACOM_VENDOR_ID, 0x6A, 100000, 100000, &usbBamboo1,    "Bamboo1 4x6"		},
+	{ WACOM_VENDOR_ID, 0x6B, 100000, 100000, &usbBamboo1,    "Bamboo1 5x8"		},
 
-	{ WACOM_VENDOR_ID, 0xB0, 200000, 200000, &usbIntuos3    }, /* Intuos3 4x5 */
-	{ WACOM_VENDOR_ID, 0xB1, 200000, 200000, &usbIntuos3    }, /* Intuos3 6x8 */
-	{ WACOM_VENDOR_ID, 0xB2, 200000, 200000, &usbIntuos3    }, /* Intuos3 9x12 */
-	{ WACOM_VENDOR_ID, 0xB3, 200000, 200000, &usbIntuos3    }, /* Intuos3 12x12 */
-	{ WACOM_VENDOR_ID, 0xB4, 200000, 200000, &usbIntuos3    }, /* Intuos3 12x19 */
-	{ WACOM_VENDOR_ID, 0xB5, 200000, 200000, &usbIntuos3    }, /* Intuos3 6x11 */
-	{ WACOM_VENDOR_ID, 0xB7, 200000, 200000, &usbIntuos3    }, /* Intuos3 4x6 */
+	{ WACOM_VENDOR_ID, 0xB0, 200000, 200000, &usbIntuos3,    "Intuos3 4x5"		},
+	{ WACOM_VENDOR_ID, 0xB1, 200000, 200000, &usbIntuos3,    "Intuos3 6x8"		},
+	{ WACOM_VENDOR_ID, 0xB2, 200000, 200000, &usbIntuos3,    "Intuos3 9x12"		},
+	{ WACOM_VENDOR_ID, 0xB3, 200000, 200000, &usbIntuos3,    "Intuos3 12x12"	},
+	{ WACOM_VENDOR_ID, 0xB4, 200000, 200000, &usbIntuos3,    "Intuos3 12x19"	},
+	{ WACOM_VENDOR_ID, 0xB5, 200000, 200000, &usbIntuos3,    "Intuos3 6x11"		},
+	{ WACOM_VENDOR_ID, 0xB7, 200000, 200000, &usbIntuos3,    "Intuos3 4x6"		},
 
-	{ WACOM_VENDOR_ID, 0xB8, 200000, 200000, &usbIntuos4    }, /* Intuos4 4x6 */
-	{ WACOM_VENDOR_ID, 0xB9, 200000, 200000, &usbIntuos4    }, /* Intuos4 6x9 */
-	{ WACOM_VENDOR_ID, 0xBA, 200000, 200000, &usbIntuos4    }, /* Intuos4 8x13 */
-	{ WACOM_VENDOR_ID, 0xBB, 200000, 200000, &usbIntuos4    }, /* Intuos4 12x19*/
-	{ WACOM_VENDOR_ID, 0xBC, 200000, 200000, &usbIntuos4    }, /* Intuos4 WL USB Endpoint */
-	{ WACOM_VENDOR_ID, 0xBD, 200000, 200000, &usbIntuos4    }, /* Intuos4 WL Bluetooth Endpoint */
+	{ WACOM_VENDOR_ID, 0xB8, 200000, 200000, &usbIntuos4,    "Intuos4 4x6"		},
+	{ WACOM_VENDOR_ID, 0xB9, 200000, 200000, &usbIntuos4,    "Intuos4 6x9"		},
+	{ WACOM_VENDOR_ID, 0xBA, 200000, 200000, &usbIntuos4,    "Intuos4 8x13"		},
+	{ WACOM_VENDOR_ID, 0xBB, 200000, 200000, &usbIntuos4,    "Intuos4 12x19"	},
+	{ WACOM_VENDOR_ID, 0xBC, 200000, 200000, &usbIntuos4,    "Intuos4 WL USB Endpoint"	},
+	{ WACOM_VENDOR_ID, 0xBD, 200000, 200000, &usbIntuos4,    "Intuos4 WL Bluetooth Endpoint"},
 
-	{ WACOM_VENDOR_ID, 0x26, 200000, 200000, &usbIntuos5    }, /* Intuos5 touch S */
-	{ WACOM_VENDOR_ID, 0x27, 200000, 200000, &usbIntuos5    }, /* Intuos5 touch M */
-	{ WACOM_VENDOR_ID, 0x28, 200000, 200000, &usbIntuos5    }, /* Intuos5 touch L */
-	{ WACOM_VENDOR_ID, 0x29, 200000, 200000, &usbIntuos5    }, /* Intuos5 S */
-	{ WACOM_VENDOR_ID, 0x2A, 200000, 200000, &usbIntuos5    }, /* Intuos5 M */
+	{ WACOM_VENDOR_ID, 0x26, 200000, 200000, &usbIntuos5,    "Intuos5 touch S"	},
+	{ WACOM_VENDOR_ID, 0x27, 200000, 200000, &usbIntuos5,    "Intuos5 touch M"	},
+	{ WACOM_VENDOR_ID, 0x28, 200000, 200000, &usbIntuos5,    "Intuos5 touch L"	},
+	{ WACOM_VENDOR_ID, 0x29, 200000, 200000, &usbIntuos5,    "Intuos5 S"		},
+	{ WACOM_VENDOR_ID, 0x2A, 200000, 200000, &usbIntuos5,    "Intuos5 M"		},
+	{ WACOM_VENDOR_ID, 0x314,200000, 200000, &usbIntuosPro,  "Intuos Pro S"		},
+	{ WACOM_VENDOR_ID, 0x315,200000, 200000, &usbIntuosPro,  "Intuos Pro M"		},
+	{ WACOM_VENDOR_ID, 0x317,200000, 200000, &usbIntuosPro,  "Intuos Pro L"		},
 
-	{ WACOM_VENDOR_ID, 0x3F, 200000, 200000, &usbCintiqV5   }, /* Cintiq 21UX */
-	{ WACOM_VENDOR_ID, 0xC5, 200000, 200000, &usbCintiqV5   }, /* Cintiq 20WSX */
-	{ WACOM_VENDOR_ID, 0xC6, 200000, 200000, &usbCintiqV5   }, /* Cintiq 12WX */
-	{ WACOM_VENDOR_ID, 0xCC, 200000, 200000, &usbCintiqV5   }, /* Cintiq 21UX2 */
-	{ WACOM_VENDOR_ID, 0xF4, 200000, 200000, &usbCintiqV5   }, /* Cintiq 24HD */
-	{ WACOM_VENDOR_ID, 0xFA, 200000, 200000, &usbCintiqV5   }, /* Cintiq 22HD */
+	{ WACOM_VENDOR_ID, 0x3F, 200000, 200000, &usbCintiqV5,   "Cintiq 21UX"		},
+	{ WACOM_VENDOR_ID, 0xC5, 200000, 200000, &usbCintiqV5,   "Cintiq 20WSX"		},
+	{ WACOM_VENDOR_ID, 0xC6, 200000, 200000, &usbCintiqV5,   "Cintiq 12WX"		},
+	{ WACOM_VENDOR_ID, 0xCC, 200000, 200000, &usbCintiqV5,   "Cintiq 21UX2"		},
+	{ WACOM_VENDOR_ID, 0xF4, 200000, 200000, &usbCintiqV5,   "Cintiq 24HD"		},
+	{ WACOM_VENDOR_ID, 0xFA, 200000, 200000, &usbCintiqV5,   "Cintiq 22HD"		},
+	{ WACOM_VENDOR_ID, 0xF8, 200000, 200000, &usbCintiqV5,   "Cintiq 24HD touch (EMR digitizer)" },
+	{ WACOM_VENDOR_ID, 0x304,200000, 200000, &usbCintiqV5,   "Cintiq 13HD"		},
+	{ WACOM_VENDOR_ID, 0x57, 200000, 200000, &usbCintiqV5,   "DTK2241"		},
+	{ WACOM_VENDOR_ID, 0x59, 200000, 200000, &usbCintiqV5,   "DTH2242"		},
+	{ WACOM_VENDOR_ID, 0x5B, 200000, 200000, &usbCintiqV5,   "Cintiq 22HDT"		},
 
-	{ WACOM_VENDOR_ID, 0x90, 100000, 100000, &usbTabletPC   }, /* TabletPC 0x90 */
-	{ WACOM_VENDOR_ID, 0x93, 100000, 100000, &usbTabletPC   }, /* TabletPC 0x93 */
-	{ WACOM_VENDOR_ID, 0x97, 100000, 100000, &usbTabletPC   }, /* TabletPC 0x97 */
-	{ WACOM_VENDOR_ID, 0x9A, 100000, 100000, &usbTabletPC   }, /* TabletPC 0x9A */
-	{ WACOM_VENDOR_ID, 0x9F, 100000, 100000, &usbTabletPC   }, /* CapPlus  0x9F */
-	{ WACOM_VENDOR_ID, 0xE2, 100000, 100000, &usbTabletPC   }, /* TabletPC 0xE2 */
-	{ WACOM_VENDOR_ID, 0xE3, 100000, 100000, &usbTabletPC   }, /* TabletPC 0xE3 */
-	{ WACOM_VENDOR_ID, 0xE6, 100000, 100000, &usbTabletPC   }, /* TabletPC 0xE6 */
-	{ WACOM_VENDOR_ID, 0xED, 100000, 100000, &usbTabletPC   }, /* TabletPC 0xED */
-	{ WACOM_VENDOR_ID, 0xEF, 100000, 100000, &usbTabletPC   }, /* TabletPC 0xEF */
+	{ WACOM_VENDOR_ID, 0x90, 100000, 100000, &usbTabletPC,   "TabletPC 0x90"	},
+	{ WACOM_VENDOR_ID, 0x93, 100000, 100000, &usbTabletPC,   "TabletPC 0x93"	},
+	{ WACOM_VENDOR_ID, 0x97, 100000, 100000, &usbTabletPC,   "TabletPC 0x97"	},
+	{ WACOM_VENDOR_ID, 0x9A, 100000, 100000, &usbTabletPC,   "TabletPC 0x9A"	},
+	{ WACOM_VENDOR_ID, 0x9F, 100000, 100000, &usbTabletPC,   "CapPlus  0x9F"	},
+	{ WACOM_VENDOR_ID, 0xE2, 100000, 100000, &usbTabletPC,   "TabletPC 0xE2"	},
+	{ WACOM_VENDOR_ID, 0xE3, 100000, 100000, &usbTabletPC,   "TabletPC 0xE3"	},
+	{ WACOM_VENDOR_ID, 0xE5, 100000, 100000, &usbTabletPC,   "TabletPC 0xE5"	},
+	{ WACOM_VENDOR_ID, 0xE6, 100000, 100000, &usbTabletPC,   "TabletPC 0xE6"	},
+	{ WACOM_VENDOR_ID, 0xEC, 100000, 100000, &usbTabletPC,   "TabletPC 0xEC"	},
+	{ WACOM_VENDOR_ID, 0xED, 100000, 100000, &usbTabletPC,   "TabletPC 0xED"	},
+	{ WACOM_VENDOR_ID, 0xEF, 100000, 100000, &usbTabletPC,   "TabletPC 0xEF"	},
+	{ WACOM_VENDOR_ID, 0x100,100000, 100000, &usbTabletPC,   "TabletPC 0x100"	},
+	{ WACOM_VENDOR_ID, 0x101,100000, 100000, &usbTabletPC,   "TabletPC 0x101"	},
+	{ WACOM_VENDOR_ID, 0x10D,100000, 100000, &usbTabletPC,   "TabletPC 0x10D"	},
+	{ WACOM_VENDOR_ID, 0x4001,100000, 100000, &usbTabletPC,  "TabletPC 0x4001"	},
 
 	/* IDs from Waltop's driver, available http://www.waltop.com.tw/download.asp?lv=0&id=2.
 	   Accessed 8 Apr 2010, driver release date 2009/08/11, fork of linuxwacom 0.8.4.
 	   Some more info would be nice for the ID's below... */
-	{ WALTOP_VENDOR_ID, 0x24,  80000,  80000, &usbGraphire   },
-	{ WALTOP_VENDOR_ID, 0x25,  80000,  80000, &usbGraphire2  },
-	{ WALTOP_VENDOR_ID, 0x26,  80000,  80000, &usbGraphire2  },
-	{ WALTOP_VENDOR_ID, 0x27,  80000,  80000, &usbGraphire3  },
-	{ WALTOP_VENDOR_ID, 0x28,  80000,  80000, &usbGraphire3  },
-	{ WALTOP_VENDOR_ID, 0x30,  80000,  80000, &usbGraphire4  },
-	{ WALTOP_VENDOR_ID, 0x31,  80000,  80000, &usbGraphire4  },
-	{ WALTOP_VENDOR_ID, 0x32, 100000, 100000, &usbBambooFun  },
-	{ WALTOP_VENDOR_ID, 0x33, 100000, 100000, &usbBambooFun  },
-	{ WALTOP_VENDOR_ID, 0x34,  80000,  80000, &usbBamboo1    },
-	{ WALTOP_VENDOR_ID, 0x35,  80000,  80000, &usbGraphire4  },
-	{ WALTOP_VENDOR_ID, 0x36,  80000,  80000, &usbGraphire4  },
-	{ WALTOP_VENDOR_ID, 0x37,  80000,  80000, &usbGraphire4  },
-	{ WALTOP_VENDOR_ID, 0x38, 100000, 100000, &usbBambooFun  },
-	{ WALTOP_VENDOR_ID, 0x39, 100000, 100000, &usbBambooFun  },
-	{ WALTOP_VENDOR_ID, 0x51, 100000, 100000, &usbBamboo     },
-	{ WALTOP_VENDOR_ID, 0x52, 100000, 100000, &usbBamboo     },
+	{ WALTOP_VENDOR_ID, 0x24,  80000,  80000, &usbGraphire,   NULL			},
+	{ WALTOP_VENDOR_ID, 0x25,  80000,  80000, &usbGraphire2,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x26,  80000,  80000, &usbGraphire2,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x27,  80000,  80000, &usbGraphire3,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x28,  80000,  80000, &usbGraphire3,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x30,  80000,  80000, &usbGraphire4,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x31,  80000,  80000, &usbGraphire4,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x32, 100000, 100000, &usbBambooFun,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x33, 100000, 100000, &usbBambooFun,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x34,  80000,  80000, &usbBamboo1,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x35,  80000,  80000, &usbGraphire4,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x36,  80000,  80000, &usbGraphire4,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x37,  80000,  80000, &usbGraphire4,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x38, 100000, 100000, &usbBambooFun,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x39, 100000, 100000, &usbBambooFun,  NULL			},
+	{ WALTOP_VENDOR_ID, 0x51, 100000, 100000, &usbBamboo,     NULL			},
+	{ WALTOP_VENDOR_ID, 0x52, 100000, 100000, &usbBamboo,     NULL			},
 
-	{ WALTOP_VENDOR_ID, 0x53,  100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x54,  100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x55,  100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x56,  100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x57,  100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x58,  100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x500, 100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x501, 100000, 100000, &usbBamboo    },
-	{ WALTOP_VENDOR_ID, 0x502, 200000, 200000, &usbIntuos4   },
-	{ WALTOP_VENDOR_ID, 0x503, 200000, 200000, &usbIntuos4   },
+	{ WALTOP_VENDOR_ID, 0x53,  100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x54,  100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x55,  100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x56,  100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x57,  100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x58,  100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x500, 100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x501, 100000, 100000, &usbBamboo,    NULL			},
+	{ WALTOP_VENDOR_ID, 0x502, 200000, 200000, &usbIntuos4,   NULL			},
+	{ WALTOP_VENDOR_ID, 0x503, 200000, 200000, &usbIntuos4,   NULL			},
 
 	/* N-Trig devices */
-	{ NTRIG_VENDOR_ID,  0x01, 44173, 36772, &usbTabletPC    },
+	{ NTRIG_VENDOR_ID,  0x01, 44173, 36772, &usbTabletPC,     NULL			},
 
 	/* Add in Lenovo W700 Palmrest digitizer */
-	{ LENOVO_VENDOR_ID, 0x6004, 2540, 2540, &usbTabletPC   } /* Pen-only */
+	{ LENOVO_VENDOR_ID, 0x6004, 100000, 100000, &usbTabletPC, NULL			} /* Pen-only */
 };
+
+void usbListModels(void)
+{
+	int i;
+	char *usbnames[ARRAY_SIZE(WacomModelDesc)] = {0};
+	SymTabRec models[ARRAY_SIZE(WacomModelDesc) + 1];
+
+	for (i = 0; i < ARRAY_SIZE(WacomModelDesc); i++)
+	{
+		struct WacomModelDesc *m = &WacomModelDesc[i];
+
+		models[i].token = i;
+		if (m->name)
+			models[i].name = m->name;
+		else {
+			/* SymTabRec has a const char *name so we can't free
+			   without compiler warnings. keep allocated stuff
+			   in separate array.
+			 */
+			usbnames[i] = malloc(64);
+			if (!usbnames[i]) {
+				/* if malloc fails, xf86PrintChipsets() terminates
+				   here because models->name is NULL. then again,
+				   malloc failed, so the rest is academic. */
+				models[i].name = NULL;
+				break;
+			}
+			sprintf(usbnames[i], "usb:%04x:%04x", m->vendor_id, m->model_id);
+			models[i].name = usbnames[i];
+		}
+	}
+
+	models[ARRAY_SIZE(models) - 1].name = NULL;
+
+	xf86PrintChipsets("wacom",
+			  "Driver for Wacom graphics tablets",
+			  models);
+
+	for (i = 0; i < ARRAY_SIZE(usbnames); i++)
+		free(usbnames[i]);
+}
+
 
 static Bool usbWcmInit(InputInfoPtr pInfo, char* id, float *version)
 {
@@ -566,10 +623,86 @@ int usbWcmGetRanges(InputInfoPtr pInfo)
 	{
 		if (is_touch)
 			common->wcmTouchResolX =
-				(int)(((double)common->wcmMaxTouchX * 10.0
+				(int)(((double)common->wcmMaxTouchX * 100000.0
 				 / (double)absinfo.maximum) + 0.5);
 		else
 			common->wcmMaxStripX = absinfo.maximum;
+	}
+
+	/* X tilt range */
+	if (ISBITSET(abs, ABS_TILT_X) &&
+			!ioctl(pInfo->fd, EVIOCGABS(ABS_TILT_X), &absinfo))
+	{
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,30)
+		/* If resolution is specified */
+		if (absinfo.resolution > 0)
+		{
+			/* Assume the range is centered on zero */
+			common->wcmTiltOffX = 0;
+			/* Convert to resolution expected by applications */
+			common->wcmTiltFactX = TILT_RES /
+					       (double)absinfo.resolution;
+		}
+		else
+#endif
+		{
+			/*
+			 * Center the reported range on zero to support
+			 * kernel drivers still reporting non-zero-centered
+			 * values.
+			 */
+			common->wcmTiltOffX = - (absinfo.minimum +
+						 absinfo.maximum) / 2;
+			/*
+			 * Assume reported resolution is the one expected by
+			 * applications
+			 */
+			common->wcmTiltFactX = 1.0;
+		}
+		common->wcmTiltMinX = round((absinfo.minimum +
+					     common->wcmTiltOffX) *
+					    common->wcmTiltFactX);
+		common->wcmTiltMaxX = round((absinfo.maximum +
+					     common->wcmTiltOffX) *
+					    common->wcmTiltFactX);
+	}
+
+	/* Y tilt range */
+	if (ISBITSET(abs, ABS_TILT_Y) &&
+			!ioctl(pInfo->fd, EVIOCGABS(ABS_TILT_Y), &absinfo))
+	{
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,30)
+		/* If resolution is specified */
+		if (absinfo.resolution > 0)
+		{
+			/* Assume the range is centered on zero */
+			common->wcmTiltOffY = 0;
+			/* Convert to resolution expected by applications */
+			common->wcmTiltFactY = TILT_RES /
+					       (double)absinfo.resolution;
+		}
+		else
+#endif
+		{
+			/*
+			 * Center the reported range on zero to support
+			 * kernel drivers still reporting non-zero-centered
+			 * values.
+			 */
+			common->wcmTiltOffY = - (absinfo.minimum +
+						 absinfo.maximum) / 2;
+			/*
+			 * Assume reported resolution is the one expected by
+			 * applications
+			 */
+			common->wcmTiltFactY = 1.0;
+		}
+		common->wcmTiltMinY = round((absinfo.minimum +
+					     common->wcmTiltOffY) *
+					    common->wcmTiltFactY);
+		common->wcmTiltMaxY = round((absinfo.maximum +
+					     common->wcmTiltOffY) *
+					    common->wcmTiltFactY);
 	}
 
 	/* max finger strip Y for tablets with Expresskeys
@@ -579,7 +712,7 @@ int usbWcmGetRanges(InputInfoPtr pInfo)
 	{
 		if (is_touch)
 			common->wcmTouchResolY =
-				 (int)(((double)common->wcmMaxTouchY * 10.0
+				 (int)(((double)common->wcmMaxTouchY * 100000.0
 				 / (double)absinfo.maximum) + 0.5);
 		else
 			common->wcmMaxStripY = absinfo.maximum;
@@ -598,6 +731,9 @@ int usbWcmGetRanges(InputInfoPtr pInfo)
 	if (ISBITSET(abs, ABS_MT_SLOT))
 	{
 		private->wcmUseMT = 1;
+
+		if (!ioctl(pInfo->fd, EVIOCGABS(ABS_MT_SLOT), &absinfo))
+			common->wcmMaxContacts = absinfo.maximum + 1;
 
 		/* pen and MT on the same logical port */
 		if (ISBITSET(common->wcmKeys, BTN_TOOL_PEN))
@@ -643,121 +779,89 @@ static int usbParse(InputInfoPtr pInfo, const unsigned char* data, int len)
 	return common->wcmPktLength;
 }
 
-/* Up to MAX_CHANNEL tools can be tracked concurrently by driver.
- * Chose a channel to use to track current batch of events.
+/**
+ * Returns a serial number for the provided device_type and serial, as
+ * through it came from from a Protocol 5 device.
+ *
+ * Protocol 5 serial numbers will be returned unchanged. Otherwise,
+ * anonymous tools (from Protocol 4 and Generic Protocol) will have
+ * serial numbers of: -1 (pad), 1 (pen/1st finger), 2 (2nd finger),
+ * etc.
+ *
+ * @param[in] device_type  Type of device (e.g. STYLUS_ID, TOUCH_ID, PAD_ID)
+ * @param[in] serial       Serial number of device
+ * @return                 Serial number of device as through from Protocol 5
  */
-static int usbChooseChannel(WacomCommonPtr common)
+static int protocol5Serial(int device_type, unsigned int serial) {
+	if (!serial) {
+		/* Generic Protocol does not send serial numbers */
+		return device_type == PAD_ID ? -1 : 1;
+	}
+	else if (serial == 0xf0) {
+		/* Protocol 4 uses the expected anonymous serial
+		 * numbers, but has the wrong PAD serial number.
+		 * This could cause problem if 0xf0 is ever used
+		 * for a Protocol 5 serial number, but isn't a
+		 * problem as yet.
+		 */
+		return -1;
+	}
+	else {
+		/* Protocol 5 FTW */
+		return serial;
+	}
+}
+
+/**
+ * Find an appropriate channel to track the specified tool's state in.
+ * If the tool is already in proximity, the channel currently being used
+ * to store its state will be returned. Otherwise, an arbitrary available
+ * channel will be returned. Up to MAX_CHANNEL tools can be tracked
+ * concurrently by driver.
+ *
+ * @param[in] common
+ * @param[in] device_type  Type of tool (e.g. STYLUS_ID, TOUCH_ID, PAD_ID)
+ * @param[in] serial       Serial number of tool
+ * @return                 Channel number to track the tool's state
+ */
+static int usbChooseChannel(WacomCommonPtr common, int device_type, unsigned int serial)
 {
 	/* figure out the channel to use based on serial number */
 	int i, channel = -1;
-	wcmUSBData* private = common->private;
-	unsigned int serial = private->wcmLastToolSerial;
 
-	if (common->wcmProtocolLevel == WCM_PROTOCOL_GENERIC)
-	{
-		/* Generic Protocol devices do not use any form of
-		 * serial #'s to multiplex events over a single input
-		 * and so can always map to channel 0.  This means
-		 * only 1 tool can ever been in proximity at one time
-		 * (MT events are special case handled elsewhere).
-		 * It also means all buttons must be associated with
-		 * a single tool and can not send tablet buttons
-		 * as part of a pad tool.
-		 */
-		channel = 0;
-		serial = 1;
+	/* force events from PAD device to PAD_CHANNEL */
+	if (serial == -1)
+		channel = PAD_CHANNEL;
 
-		/* Generic devices need to map stylus buttons to "channel"
-		 * and all other button presses to PAD.  Hardcode PAD
-		 * channel here.
-		 */
-		private->wcmBTNChannel = PAD_CHANNEL;
-	}
-	else if (common->wcmProtocolLevel == WCM_PROTOCOL_4)
+	/* find existing channel */
+	if (channel < 0)
 	{
-		/* Protocol 4 devices support only 2 devices being
-		 * in proximity at the same time.  This includes
-		 * the PAD device as well as 1 other tool
-		 * (stylus, mouse, finger touch, etc).
-		 * There is a special case of Tablet PC that also
-		 * suport a 3rd tool (2nd finger touch) to also be
-		 * in proximity at same time but this should eventually
-		 * go away when its switched to MT events to fix loss of
-		 * events.
-		 *
-		 * Protocol 4 send fixed serial numbers along with events.
-		 * Events associated with PAD device
-		 * will send serial number of 0xf0 always.
-		 * Events associated with BTN_TOOL_TRIPLETAP (2nd finger
-		 * touch) send a serial number of 0x02 always.
-		 * Events associated with all other BTN_TOOL_*'s will
-		 * either send a serial # of 0x01 or we can act as if
-		 * they did send that value.
-		 *
-		 * Since its a fixed mapping, directly convert this to
-		 * channels 0 to 2 with last channel always used for
-		 * pad devices.
-		 */
-		if (serial == 0xf0)
-			channel = PAD_CHANNEL;
-		else if (serial)
-			channel = serial-1;
-		else
-			channel = 0;
-		/* All events go to same channel for Protocol 4 */
-		private->wcmBTNChannel = channel;
-	}
-	else if (serial) /* serial number should never be 0 for V5 devices */
-	{
-		/* Protocol 5 devices can support tracking 2 or 3
-		 * tools at once.  One is the PAD device
-		 * as well as a stylus and/or mouse.
-		 *
-		 * Events associated with PAD device
-		 * will send serial number of -1 (0xffffffff) always.
-		 * Events associated with all other BTN_TOOL_*'s will
-		 * send a dynamic serial #.
-		 *
-		 * Logic here is related to dynamically mapping
-		 * serial numbers to a fixed channel #.
-		 */
-		if (TabletHasFeature(common, WCM_DUALINPUT))
+		for (i=0; i<MAX_CHANNELS; i++)
 		{
-			/* find existing channel */
-			for (i=0; i<MAX_CHANNELS; ++i)
+			if (common->wcmChannel[i].work.proximity &&
+			    common->wcmChannel[i].work.device_type == device_type &&
+			    common->wcmChannel[i].work.serial_num == serial)
 			{
-				if (common->wcmChannel[i].work.proximity &&
-					common->wcmChannel[i].work.serial_num == serial)
-				{
-					channel = i;
-					break;
-				}
-			}
-
-			/* find an empty channel */
-			if (channel < 0)
-			{
-				for (i=0; i<MAX_CHANNELS; ++i)
-				{
-					if (!common->wcmChannel[i].work.proximity)
-					{
-						channel = i;
-						break;
-					}
-				}
+				channel = i;
+				break;
 			}
 		}
-		else  /* one transducer plus expresskey (pad) is supported */
+	}
+
+	/* find an empty channel */
+	if (channel < 0)
+	{
+		for (i=0; i<MAX_CHANNELS; i++)
 		{
-			if (serial == -1)  /* pad */
-				channel = 1;
-			else if ( (common->wcmChannel[0].work.proximity &&  /* existing transducer */
-				    (common->wcmChannel[0].work.serial_num == serial)) ||
-					!common->wcmChannel[0].work.proximity ) /* new transducer */
-				channel = 0;
+			if (i == PAD_CHANNEL)
+				continue;
+
+			if (!common->wcmChannel[i].work.proximity)
+			{
+				channel = i;
+				break;
+			}
 		}
-		/* All events go to same channel for Protocol 5 */
-		private->wcmBTNChannel = channel;
 	}
 
 	/* fresh out of channels */
@@ -766,10 +870,13 @@ static int usbChooseChannel(WacomCommonPtr common)
 		/* This should never happen in normal use.
 		 * Let's start over again. Force prox-out for all channels.
 		 */
-		for (i=0; i<MAX_CHANNELS; ++i)
+		for (i=0; i<MAX_CHANNELS; i++)
 		{
+			if (i == PAD_CHANNEL)
+				continue;
+
 			if (common->wcmChannel[i].work.proximity &&
-					(common->wcmChannel[i].work.serial_num != -1))
+			    (common->wcmChannel[i].work.serial_num != -1))
 			{
 				common->wcmChannel[i].work.proximity = 0;
 				/* dispatch event */
@@ -777,11 +884,9 @@ static int usbChooseChannel(WacomCommonPtr common)
 			}
 		}
 		DBG(1, common, "device with serial number: %u"
-			" at %d: Exceeded channel count; ignoring the events.\n",
-			serial, (int)GetTimeInMillis());
+		    " at %d: Exceeded channel count; ignoring the events.\n",
+		    serial, (int)GetTimeInMillis());
 	}
-	else
-		private->wcmLastToolSerial = serial;
 
 	return channel;
 }
@@ -893,6 +998,8 @@ static int usbFilterEvent(WacomCommonPtr common, struct input_event *event)
 			{
 				case BTN_TOUCH:
 				case BTN_TOOL_FINGER:
+				case BTN_TOOL_DOUBLETAP:
+				case BTN_TOOL_TRIPLETAP:
 					return 1;
 			}
 		}
@@ -1022,9 +1129,11 @@ static int usbFindDeviceType(const WacomCommonPtr common,
 	return device_type;
 }
 
-static int usbParseAbsEvent(WacomCommonPtr common,
-			    struct input_event *event, WacomDeviceState *ds)
+static void usbParseAbsEvent(WacomCommonPtr common,
+			    struct input_event *event, int channel_number)
 {
+	WacomChannel *channel = &common->wcmChannel[channel_number];
+	WacomDeviceState *ds = &channel->work;
 	int change = 1;
 
 	switch(event->code)
@@ -1045,10 +1154,12 @@ static int usbParseAbsEvent(WacomCommonPtr common,
 			ds->rotation = event->value;
 			break;
 		case ABS_TILT_X:
-			ds->tiltx = event->value - common->wcmMaxtiltX/2;
+			ds->tiltx = round((event->value + common->wcmTiltOffX) *
+					  common->wcmTiltFactX);
 			break;
 		case ABS_TILT_Y:
-			ds->tilty = event->value - common->wcmMaxtiltY/2;
+			ds->tilty = round((event->value + common->wcmTiltOffY) *
+					  common->wcmTiltFactY);
 			break;
 		case ABS_PRESSURE:
 			ds->pressure = event->value;
@@ -1064,7 +1175,8 @@ static int usbParseAbsEvent(WacomCommonPtr common,
 			break;
 		case ABS_THROTTLE:
 			/* 2nd touch ring comes in over ABS_THROTTLE for 24HD */
-			if (common->vendor_id == WACOM_VENDOR_ID && common->tablet_id == 0xF4)
+			if ((common->vendor_id == WACOM_VENDOR_ID) &&
+			    (common->tablet_id == 0xF4 || common->tablet_id == 0xF8))
 				ds->abswheel2 = event->value;
 			else
 				ds->throttle = event->value;
@@ -1080,7 +1192,8 @@ static int usbParseAbsEvent(WacomCommonPtr common,
 		default:
 			change = 0;
 	}
-	return change;
+
+	channel->dirty |= change;
 }
 
 /**
@@ -1114,7 +1227,7 @@ static int mod_buttons(int buttons, int btn, int state)
 	return buttons;
 }
 
-static int usbParseAbsMTEvent(WacomCommonPtr common, struct input_event *event)
+static void usbParseAbsMTEvent(WacomCommonPtr common, struct input_event *event)
 {
 	int change = 1;
 	wcmUSBData* private = common->private;
@@ -1125,15 +1238,18 @@ static int usbParseAbsMTEvent(WacomCommonPtr common, struct input_event *event)
 	switch(event->code)
 	{
 		case ABS_MT_SLOT:
-			if (event->value >= 0 && event->value < MAX_FINGERS)
-				private->wcmMTChannel = event->value;
+			if (event->value >= 0) {
+				int serial = event->value + 1;
+				private->wcmMTChannel = usbChooseChannel(common, TOUCH_ID, serial);
+				ds = &common->wcmChannel[private->wcmMTChannel].work;
+				ds->serial_num = serial;
+			}
 			break;
 
 		case ABS_MT_TRACKING_ID:
 			ds->proximity = (event->value != -1);
 			ds->device_type = TOUCH_ID;
 			ds->device_id = TOUCH_DEVICE_ID;
-			ds->serial_num = private->wcmMTChannel+1;
 			ds->sample = (int)GetTimeInMillis();
 			break;
 
@@ -1152,33 +1268,17 @@ static int usbParseAbsMTEvent(WacomCommonPtr common, struct input_event *event)
 		default:
 			change = 0;
 	}
-	return change;
+
+	(&common->wcmChannel[private->wcmMTChannel])->dirty |= change;
 }
 
-static struct
-{
-	unsigned long device_type;
-	unsigned long tool_key;
-} wcmTypeToKey [] =
-{
-	{ STYLUS_ID, BTN_TOOL_PEN       },
-	{ STYLUS_ID, BTN_TOOL_PENCIL    },
-	{ STYLUS_ID, BTN_TOOL_BRUSH     },
-	{ STYLUS_ID, BTN_TOOL_AIRBRUSH  },
-	{ ERASER_ID, BTN_TOOL_RUBBER    },
-	{ CURSOR_ID, BTN_TOOL_MOUSE     },
-	{ CURSOR_ID, BTN_TOOL_LENS      },
-	{ TOUCH_ID,  BTN_TOOL_DOUBLETAP },
-	{ TOUCH_ID,  BTN_TOOL_TRIPLETAP },
-	{ PAD_ID,    BTN_FORWARD        },
-	{ PAD_ID,    BTN_0              }
-};
-
-static int usbParseKeyEvent(WacomCommonPtr common,
-			    struct input_event *event, WacomDeviceState *ds,
-			    WacomDeviceState *dslast)
+static void usbParseKeyEvent(WacomCommonPtr common,
+			    struct input_event *event, int channel_number)
 {
 	int change = 1;
+	WacomChannel *channel = &common->wcmChannel[channel_number];
+	WacomDeviceState *ds = &channel->work;
+	WacomDeviceState *dslast = &channel->valid.state;
 
 	/* BTN_TOOL_* are sent to indicate when a specific tool is going
 	 * in our out of proximity.  When going in proximity, here we
@@ -1290,8 +1390,10 @@ static int usbParseKeyEvent(WacomCommonPtr common,
 			change = 0;
 	}
 
+	channel->dirty |= change;
+
 	if (change)
-		return change;
+		return;
 
 	/* Rest back to non-default value for next switch statement */
 	change = 1;
@@ -1314,16 +1416,18 @@ static int usbParseKeyEvent(WacomCommonPtr common,
 			change = 0;
 	}
 
-	return change;
+	channel->dirty |= change;
 }
 
 /* Handle all button presses except for stylus buttons */
-static int usbParseBTNEvent(WacomCommonPtr common,
-			    struct input_event *event, WacomDeviceState *ds)
+static void usbParseBTNEvent(WacomCommonPtr common,
+			    struct input_event *event, int channel_number)
 {
 	int nkeys;
 	int change = 1;
 	wcmUSBData *usbdata = common->private;
+	WacomChannel *channel = &common->wcmChannel[channel_number];
+	WacomDeviceState *ds = &channel->work;
 
 	switch (event->code)
 	{
@@ -1360,114 +1464,178 @@ static int usbParseBTNEvent(WacomCommonPtr common,
 			}
 			if (nkeys >= usbdata->npadkeys)
 				change = 0;
+			else if (!ds->device_type) /* expresskey pressed at startup */
+				ds->device_type = PAD_ID;
 	}
-	return change;
+
+	channel->dirty |= change;
+}
+
+/**
+ * Translates a tool code from the kernel (e.g. BTN_TOOL_PEN) into the
+ * corresponding device type for the driver (e.g. STYLUS_ID).
+ *
+ * @param[in] common
+ * @param[in] type      Linux input tool type (e.g. EV_KEY)
+ * @param[in] code      Linux input tool code (e.g. BTN_STYLUS_PEN)
+ * @return              Wacom device ID (e.g. STYLUS_ID) or 0 if no match.
+ */
+static int toolTypeToDeviceType(WacomCommonPtr common, int type, int code)
+{
+	wcmUSBData* private = common->private;
+
+	if (type == EV_KEY) {
+		switch(code) {
+			case BTN_TOOL_PEN:
+			case BTN_TOOL_PENCIL:
+			case BTN_TOOL_BRUSH:
+			case BTN_TOOL_AIRBRUSH:
+				return STYLUS_ID;
+
+			case BTN_TOOL_MOUSE:
+			case BTN_TOOL_LENS:
+				return CURSOR_ID;
+
+			case BTN_TOOL_FINGER:
+				if ((common->wcmProtocolLevel != WCM_PROTOCOL_GENERIC)
+				    && !private->wcmUseMT)
+					return PAD_ID;
+				else
+					return TOUCH_ID;
+
+			case BTN_TOOL_RUBBER:
+				return ERASER_ID;
+		}
+	}
+	else if (type == EV_ABS) {
+		switch (code) {
+			case ABS_MT_SLOT:
+			case ABS_MT_TRACKING_ID:
+				return TOUCH_ID;
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * Queries the kernel through EVIOCGKEY for the latest device type
+ * information. The result is the first tool type (e.g. STYLUS_ID)
+ * found associated with the in-prox tool.
+ *
+ * @param[in] common
+ * @return            A tool type (e.g. STYLUS_ID) associated with the in-prox tool
+ */
+static int refreshDeviceType(WacomCommonPtr common)
+{
+	int device_type = 0;
+	unsigned long keys[NBITS(KEY_MAX)] = { 0 };
+	int rc = ioctl(common->fd, EVIOCGKEY(sizeof(keys)), keys);
+	int i;
+
+	if (rc == -1) {
+		xf86Msg(X_ERROR, "%s: failed to retrieve key bits\n", common->device_path);
+		return 0;
+	}
+
+	for (i = 0; i < KEY_MAX; i++)
+	{
+		if (ISBITSET(keys, i))
+			device_type = toolTypeToDeviceType(common, EV_KEY, i);
+		if (device_type)
+			return device_type;
+	}
+
+	return 0;
 }
 
 /***
  * Retrieve the tool type from an USB data packet by looking at the event
  * codes. Refer to linux/input.h for event codes that define tool types.
  *
- * @param event_ptr A pointer to the USB data packet that contains the
+ * @param[in] common
+ * @param[in] event_ptr A pointer to the USB data packet that contains the
  * events to be processed.
- * @param nevents Number of events in the packet.
- * @param last_device_type The device type for the last event
+ * @param[in] nevents Number of events in the packet.
+ * @param[in] last_device_type The device type for the last event
  *
- * @return The tool type. last_device_type if no pen/touch/eraser event code
- *         in the event, or TOUCH_ID if last_device_type is not a tool.
+ * @return The tool type. This falls back on last_device_type if no
+ *         pen/touch/eraser event code in the event, and on EVIOCGKEY
+ *         if last_device_type is not a tool. If all else fails, '0'
+ *         is returned.
  */
-static int usbInitToolType(const struct input_event *event_ptr, int nevents, int last_device_type)
+static int usbInitToolType(WacomCommonPtr common, const struct input_event *event_ptr,
+                           int nevents, int last_device_type)
 {
 	int i, device_type = 0;
 
-	for (i = 0; (i < nevents) && !device_type; ++i)
+	for (i = 0; (i < nevents) && !device_type; ++i, event_ptr++)
 	{
-		switch (event_ptr->code)
-		{
-			case BTN_TOOL_PEN:
-			case BTN_TOOL_PENCIL:
-			case BTN_TOOL_BRUSH:
-			case BTN_TOOL_AIRBRUSH:
-				device_type = STYLUS_ID;
-				break;
-
-			case BTN_TOOL_FINGER:
-			case ABS_MT_SLOT:
-			case ABS_MT_TRACKING_ID:
-				device_type = TOUCH_ID;
-				break;
-
-			case BTN_TOOL_RUBBER:
-				device_type = ERASER_ID;
-				break;
-		}
-
-		event_ptr++;
+		device_type = toolTypeToDeviceType(common, event_ptr->type, event_ptr->code);
 	}
 
 	if (!device_type)
-	{
-		if (last_device_type)
-			device_type = last_device_type;
-		else
-			device_type = TOUCH_ID;
-	}
+		device_type = last_device_type;
+
+	if (!device_type)
+		device_type = refreshDeviceType(common);
 
 	return device_type;
 }
 
 /**
- * Check if the tool is a stylus/eraser and in-prox or not.
+ * Check if the tool is a stylus/eraser/cursor and in-prox or not.
  *
  * @param device_type The tool type stored in wcmChannel
  * @param proximity The tool's proximity state
 
- * @return True if stylus/eraser is in-prox; False otherwise.
+ * @return True if stylus/eraser/cursor is in-prox; False otherwise.
  */
-static Bool usbIsPenInProx(int device_type, int proximity)
+static Bool usbIsTabletToolInProx(int device_type, int proximity)
 {
-	Bool is_pen = (device_type == STYLUS_ID) ||
-			(device_type == ERASER_ID);
-	return (is_pen && proximity);
+	Bool is_tablet_tool = (device_type == STYLUS_ID) ||
+				(device_type == CURSOR_ID) ||
+				(device_type == ERASER_ID);
+	return (is_tablet_tool && proximity);
 }
 
 static void usbDispatchEvents(InputInfoPtr pInfo)
 {
 	int i;
-	WacomDeviceState *ds, *btn_ds;
+	WacomDeviceState *ds;
 	struct input_event* event;
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
 	WacomCommonPtr common = priv->common;
 	int channel;
-	int channel_change = 0, btn_channel_change = 0, mt_channel_change = 0;
 	WacomDeviceState dslast = common->wcmChannel[0].valid.state;
 	wcmUSBData* private = common->private;
 
 	DBG(6, common, "%d events received\n", private->wcmEventCnt);
 
-	if (private->wcmUseMT)
-		private->wcmDeviceType = usbInitToolType(private->wcmEvents,
-							 private->wcmEventCnt,
-							 dslast.device_type);
+	private->wcmDeviceType = usbInitToolType(common,
+	                                         private->wcmEvents,
+	                                         private->wcmEventCnt,
+	                                         dslast.device_type);
 
 	if (private->wcmPenTouch)
 	{
-		/* We get both pen and touch data from the kernel when they
-		 * both are in/down. So, if we were (hence the need of dslast)
-		 * processing pen events, we should ignore touch events.
+		/* We get both tablet tool and touch data from the kernel when
+		 * both tools are in/down. So, if we were (hence the need of dslast)
+		 * processing tablet tool events, we should ignore touch events.
 		 *
 		 * MT events will be posted to the userland when XInput 2.1
 		 * is ready.
 		 */
 		if ((private->wcmDeviceType == TOUCH_ID) &&
-				usbIsPenInProx(dslast.device_type, dslast.proximity))
+				usbIsTabletToolInProx(dslast.device_type, dslast.proximity))
 		{
 			private->wcmEventCnt = 0;
 			return;
 		}
 	}
 
-	channel = usbChooseChannel(common);
+	private->wcmLastToolSerial = protocol5Serial(private->wcmDeviceType, private->wcmLastToolSerial);
+	channel = usbChooseChannel(common, private->wcmDeviceType, private->wcmLastToolSerial);
 
 	/* couldn't decide channel? invalid data */
 	if (channel == -1) {
@@ -1475,11 +1643,8 @@ static void usbDispatchEvents(InputInfoPtr pInfo)
 		return;
 	}
 
-	/* Protocol 5 devices have some complications related to DUALINPUT
-	 * support and can not use below logic to recover from input
-	 * event filtering.  Instead, just live with occasional dropped
-	 * event.  Since tools are dynamically assigned a channel #, the
-	 * structure must be initialized to known starting values
+	/* Protocol 5 tools are dynamically assigned with channel numbers.
+	 * The structure must be initialized to known starting values
 	 * when first entering proximity to discard invalid data.
 	 */
 	if (common->wcmProtocolLevel == WCM_PROTOCOL_5)
@@ -1488,42 +1653,20 @@ static void usbDispatchEvents(InputInfoPtr pInfo)
 			memset(&common->wcmChannel[channel],0,
 			       sizeof(WacomChannel));
 	}
-	else
-	{
-		/* Because of linux input filtering, each switch to a new
-		 * tool is required to have its initial values match values
-		 * of previous tool.
-		 *
-		 * For normal case, all tools are in channel 0 and so
-		 * no issue.  Protocol 4 2FGT devices split between
-		 * two channels though and so need to copy data between
-		 * channels to prevent loss of events; which could
-		 * lead to cursor jumps.
-		 *
-		 * PAD device is special.  It shares no events
-		 * with other channels and is always in proximity.
-		 * So it requires no copying of data from other
-		 * channels.
-		 */
-		if (private->wcmPrevChannel != channel &&
-		    channel != PAD_CHANNEL &&
-		    private->wcmPrevChannel != PAD_CHANNEL)
-		{
-			common->wcmChannel[channel].work =
-				common->wcmChannel[private->wcmPrevChannel].work;
-			private->wcmPrevChannel = channel;
-		}
-	}
 
 	ds = &common->wcmChannel[channel].work;
 	dslast = common->wcmChannel[channel].valid.state;
 
+	/* no device type? */
+	if (!ds->device_type && private->wcmDeviceType) {
+		/* tool was on tablet at startup, force type and proximity */
+		ds->device_type = private->wcmDeviceType;
+		ds->proximity = 1;
+	}
+
 	/* all USB data operates from previous context except relative values*/
 	ds->relwheel = 0;
 	ds->serial_num = private->wcmLastToolSerial;
-
-	/* For protocol 4 and 5 devices, ds == btn_ds. */
-	btn_ds = &common->wcmChannel[private->wcmBTNChannel].work;
 
 	/* loop through all events in group */
 	for (i=0; i<private->wcmEventCnt; ++i)
@@ -1540,22 +1683,15 @@ static void usbDispatchEvents(InputInfoPtr pInfo)
 		/* absolute events */
 		if (event->type == EV_ABS)
 		{
-			if (usbParseAbsEvent(common, event, ds))
-				channel_change |= 1;
-			else if (usbParseAbsMTEvent(common, event))
-			{
-				if (private->wcmMTChannel == 0)
-					channel_change |= 1;
-				else if (private->wcmMTChannel == 1)
-					mt_channel_change |= 1;
-			}
+			usbParseAbsEvent(common, event, channel);
+			usbParseAbsMTEvent(common, event);
 		}
 		else if (event->type == EV_REL)
 		{
 			if (event->code == REL_WHEEL)
 			{
 				ds->relwheel = -event->value;
-				channel_change |= 1;
+				common->wcmChannel[channel].dirty |= TRUE;
 			}
 			else
 				LogMessageVerbSigSafe(X_ERROR, 0,
@@ -1564,41 +1700,14 @@ static void usbDispatchEvents(InputInfoPtr pInfo)
 		}
 		else if (event->type == EV_KEY)
 		{
-			if (usbParseKeyEvent(common, event, ds, &dslast))
-				channel_change |= 1;
-			else
-				btn_channel_change |=
-					usbParseBTNEvent(common, event,
-							 btn_ds);
+			/* Button events can be from puck or expresskeys */
+			int btn_channel = (ds->device_type == CURSOR_ID) ?
+					   channel : PAD_CHANNEL;
+
+			usbParseKeyEvent(common, event, channel);
+			usbParseBTNEvent(common, event, btn_channel);
 		}
 	} /* next event */
-
-	/* device type unknown? Tool may be on the tablet when X starts. */
-	if (!ds->device_type && !dslast.proximity)
-	{
-		unsigned long keys[NBITS(KEY_MAX)] = { 0 };
-		int rc;
-
-		/* Retrieve the type by asking a resend from the kernel */
-		rc = ioctl(common->fd, EVIOCGKEY(sizeof(keys)), keys);
-		if (rc == -1)
-		{
-			LogMessageVerbSigSafe(X_ERROR, 0,
-					      "%s: failed to retrieve key bits\n",
-					      pInfo->name);
-			return;
-		}
-
-		for (i = 0; i < ARRAY_SIZE(wcmTypeToKey); i++)
-		{
-			if (ISBITSET(keys, wcmTypeToKey[i].tool_key))
-			{
-				ds->device_type = wcmTypeToKey[i].device_type;
-				ds->proximity = 1;
-				break;
-			}
-		}
-	}
 
 	/* DTF720 and DTF720a don't support eraser */
 	if (((common->tablet_id == 0xC0) || (common->tablet_id == 0xC2)) && 
@@ -1616,25 +1725,16 @@ static void usbDispatchEvents(InputInfoPtr pInfo)
 	/* don't send touch event when touch isn't enabled */
 	if (ds->device_type != TOUCH_ID || common->wcmTouch)
 	{
-		/* dispatch events */
-		if (channel_change ||
-		    (private->wcmBTNChannel == channel && btn_channel_change))
-			wcmEvent(common, channel, ds);
-
-		/* dispatch for second finger.
-		 * first finger is handled above. */
-		if (mt_channel_change)
-		{
-			WacomDeviceState *mt_ds;
-
-			mt_ds = &common->wcmChannel[1].work;
-			wcmEvent(common, 1, mt_ds);
+		int c;
+		for (c = 0; c < MAX_CHANNELS; c++) {
+			DBG(10, common, "Checking if channel %d is dirty...\n", c);
+			if (common->wcmChannel[c].dirty) {
+				DBG(10, common, "Dirty flag set on channel %d; sending event.\n", c);
+				common->wcmChannel[c].dirty = FALSE;
+				wcmEvent(common, c, &common->wcmChannel[c].work);
+			}
 		}
 	}
-
-       /* dispatch butten events when re-routed */
-	if (private->wcmBTNChannel != channel && btn_channel_change)
-		wcmEvent(common, private->wcmBTNChannel, btn_ds);
 }
 
 /* Quirks to unify the tool and tablet types for GENERIC protocol tablet PCs

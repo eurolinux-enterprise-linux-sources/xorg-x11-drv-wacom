@@ -8,7 +8,7 @@
 
 Summary:    Xorg X11 wacom input driver
 Name:       xorg-x11-drv-wacom
-Version:    0.16.1
+Version:    0.23.0
 Release:    4%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:        http://www.x.org
 License:    GPLv2+
@@ -23,16 +23,12 @@ Source2: commitid
 Source0: http://prdownloads.sourceforge.net/linuxwacom/xf86-input-wacom-%{version}.tar.bz2
 %endif
 
-# Bug 862939 - Two devices with the same device node cause a double free (and crash)
-Patch001: 0001-Fix-double-free-in-wcmPreInitParseOptions.patch
-# Bug 859851 - Hovering the Expresskeys on Intuos5 causes spurious stylus jump to (0,0)
-Patch002: 0002-Ignore-out-of-prox-events-from-unknown-devices-alrea.patch
-
-# Bug 920385 - Unable to map the esc key using xsetwacom.
-Patch003: 0001-xsetwacom-add-special-mappings-for-Home-End-Delete.patch
-Patch004: 0002-xsetwacom-if-we-fail-to-map-a-string-try-as-special-.patch
-Patch005: 0003-xsetwacom-map-a-bunch-of-special-symbols.patch
-Patch006: 0004-Have-keysym_to_keycode-handle-unused-keycodes.patch
+Patch001: 0001-Threshold-applies-to-pen-tools-only.patch
+Patch002: 0002-Fix-missing-pad-expresskey-events-issue.patch
+Patch003: 0003-Decide-WCM_LCD-by-kernel-property.patch
+Patch004: 0004-RHEL6-Revert-error-checking.patch
+Patch005: 0005-Grab-the-device-by-default.patch
+Patch006: 0006-Define-the-required-bits-for-property-checking.patch
 
 ExcludeArch: s390 s390x
 
@@ -120,6 +116,23 @@ X.Org X11 wacom input driver development files.
 %{_bindir}/isdv4-serial-debugger
 
 %changelog
+* Mon Jun 02 2014 Peter Hutterer <peter.hutterer@redhat.com> 0.23.0-4
+- Disable action property error checking to ignore invalid values from g-s-d
+  (#1077478)
+
+* Thu May 08 2014 Peter Hutterer <peter.hutterer@redhat.com> 0.23.0-3
+- Merge RHEL7 extra patches, add RHEL6 compat patch to enable INPUT_PROP
+  checking
+- Grab the event device by default for backwards-compat (#1077478)
+
+* Wed May 07 2014 Peter Hutterer <peter.hutterer@redhat.com> 0.23.0-2
+- Don't fail on invalid action properties, just ignore them. g-s-d can't
+  handle that, see #1095019. (#1077478)
+- Drop all now unused patches
+
+* Wed Apr 23 2014 Adam Jackson <ajax@redhat.com> 0.23.0-1
+- wacom 0.23.0
+
 * Mon Jul 01 2013 Peter Hutterer <peter.hutterer@redhat.com> 0.16.1-4
 - Add support for more special symbols to xsetwacom (#920385)
 

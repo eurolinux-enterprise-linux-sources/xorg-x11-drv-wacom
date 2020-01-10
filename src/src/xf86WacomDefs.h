@@ -1,6 +1,6 @@
 /*
  * Copyright 1995-2002 by Frederic Lepied, France. <Lepied@XFree86.org>
- * Copyright 2002-2010 by Ping Cheng, Wacom. <pingc@wacom.com>
+ * Copyright 2002-2013 by Ping Cheng, Wacom. <pingc@wacom.com>
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -42,6 +42,11 @@
 #define MIN_ROTATION  -900      /* the minimum value of the marker pen rotation */
 #define MAX_ROTATION_RANGE 1800 /* the maximum range of the marker pen rotation */
 #define MAX_ABS_WHEEL 1023      /* the maximum value of absolute wheel */
+
+#define TILT_RES (180/M_PI)	/* Reported tilt resolution in points/radian
+				   (1/degree) */
+#define TILT_MIN -64		/* Minimum reported tilt value */
+#define TILT_MAX 63		/* Maximum reported tilt value */
 
 #define MIN_PAD_RING 0		/* I4 absolute scroll ring min value */
 #define MAX_PAD_RING 71		/* I4 absolute scroll ring max value */
@@ -179,6 +184,7 @@ struct _WacomModel
 #define IsEraser(priv) (DEVICE_ID((priv)->flags) == ERASER_ID)
 #define IsPad(priv)    (DEVICE_ID((priv)->flags) == PAD_ID)
 #define IsPen(priv)    (IsStylus(priv) || IsEraser(priv))
+#define IsTablet(priv) (IsPen(priv) || IsCursor(priv))
 
 #define IsUSBDevice(common) ((common)->wcmDevCls == &gWacomUSBDevice)
 
@@ -188,9 +194,22 @@ struct _WacomModel
 #define DEFAULT_THRESHOLD (FILTER_PRESSURE_RES / 75)
 
 #define WCM_MAX_BUTTONS		32	/* maximum number of tablet buttons */
+#define WCM_MAX_X11BUTTON	127	/* maximum button number X11 can handle */
 
 #define AXIS_INVERT  0x01               /* Flag describing an axis which increases "downward" */
 #define AXIS_BITWISE 0x02               /* Flag describing an axis which changes bitwise */
+
+/* Indicies into the wheel/strip default/keys/actions arrays */
+#define WHEEL_REL_UP      0
+#define WHEEL_REL_DN      1
+#define WHEEL_ABS_UP      2
+#define WHEEL_ABS_DN      3
+#define WHEEL2_ABS_UP     4
+#define WHEEL2_ABS_DN     5
+#define STRIP_LEFT_UP     0
+#define STRIP_LEFT_DN     1
+#define STRIP_RIGHT_UP    2
+#define STRIP_RIGHT_DN    3
 
 /* get/set/property */
 typedef struct _PROPINFO PROPINFO;
@@ -227,33 +246,25 @@ struct _WacomDeviceRec
 	unsigned int serial;	/* device serial number this device takes (if 0, any serial is ok) */
 	unsigned int cur_serial; /* current serial in prox */
 	int cur_device_id;	/* current device ID in prox */
-	int maxWidth;		/* max active screen width in screen coords */
-	int maxHeight;		/* max active screen height in screen coords */
 	int leftPadding;	/* left padding for virtual tablet in device coordinates*/
 	int topPadding;		/* top padding for virtual tablet in device coordinates*/
-	/*  map zero based internal buttons to one based X buttons */
-	int button[WCM_MAX_BUTTONS];
-	/* map one based X buttons to keystrokes */
-	unsigned keys[WCM_MAX_BUTTONS+1][256];
-	int relup;
-	int reldn;
-	int wheelup;
-	int wheeldn;
-	int wheel2up;
-	int wheel2dn;
-	/* keystrokes assigned to wheel events (default is the buttons above).
-	 * Order is relup, reldwn, wheelup, wheeldn, wheel2up, wheel2dn.
-	 * Like 'keys', this array is one-indexed */
-	unsigned wheel_keys[6+1][256];
 
-	int striplup;
-	int stripldn;
-	int striprup;
-	int striprdn;
-	/* keystrokes assigned to strip events (default is the buttons above).
-	 * Order is striplup, stripldn, striprup, striprdn. Like 'keys', this
-	 * array is one-indexed */
-	unsigned strip_keys[4+1][256];
+	/* button mapping information
+	 *
+	 * 'button' variables are indexed by physical button number (0..nbuttons)
+	 * 'strip' variables are indexed by STRIP_* defines
+	 * 'wheel' variables are indexed by WHEEL_* defines
+	 */
+	int button_default[WCM_MAX_BUTTONS]; /* Default mappings set by ourselves (possibly overridden by xorg.conf) */
+	int strip_default[4];
+	int wheel_default[6];
+	unsigned keys[WCM_MAX_BUTTONS][256]; /* Action codes to perform when the associated event occurs */
+	unsigned strip_keys[4][256];
+	unsigned wheel_keys[6][256];
+	Atom btn_actions[WCM_MAX_BUTTONS];   /* Action references so we can update the action codes when a client makes a change */
+	Atom strip_actions[4];
+	Atom wheel_actions[6];
+
 	int nbuttons;           /* number of buttons for this subdevice */
 	int naxes;              /* number of axes */
 				/* FIXME: always 6, and the code relies on that... */
@@ -296,11 +307,6 @@ struct _WacomDeviceRec
 	WacomToolPtr tool;         /* The common tool-structure for this device */
 
 	int isParent;		/* set to 1 if the device is not auto-hotplugged */
-
-	/* property handlers to listen to for action properties */
-	Atom btn_actions[WCM_MAX_BUTTONS];
-	Atom wheel_actions[6];
-	Atom strip_actions[4];
 
 	OsTimerPtr serial_timer; /* timer used for serial number property update */
 	OsTimerPtr tap_timer;   /* timer used for tap timing */
@@ -354,6 +360,7 @@ struct _WacomChannel
 	 * the work stage and the valid state. */
 
 	WacomDeviceState work;                         /* next state */
+	Bool dirty;
 
 	/* the following union contains the current known state of the
 	 * device channel, as well as the previous MAX_SAMPLES states
@@ -387,12 +394,11 @@ extern WacomDeviceClass gWacomISDV4Device;
  * WacomCommonRec
  *****************************************************************************/
 
-#define TILT_REQUEST_FLAG       1
 #define TILT_ENABLED_FLAG       2
 
-#define MAX_CHANNELS 3
+#define MAX_FINGERS 16
+#define MAX_CHANNELS (MAX_FINGERS+2) /* one channel for stylus/mouse. The other one for pad */
 #define PAD_CHANNEL (MAX_CHANNELS-1)
-#define MAX_FINGERS  2
 
 typedef struct {
 	int wcmZoomDistance;	       /* minimum distance for a zoom touch gesture */
@@ -412,7 +418,7 @@ enum WacomProtocol {
 struct _WacomCommonRec 
 {
 	/* Do not move device_path, same offset as priv->name. Used by DBG macro */
-	const char* device_path;    /* device file name */
+	char* device_path;          /* device file name */
 	dev_t min_maj;               /* minor/major number */
 	unsigned char wcmFlags;     /* various flags (handle tilt) */
 	int debugLevel;
@@ -439,8 +445,20 @@ struct _WacomCommonRec
 	                             /* tablet Z resolution is equivalent
 	                              * to wcmMaxZ which is equal to 100% pressure */
 	int wcmMaxDist;              /* tablet max distance value */
-	int wcmMaxtiltX;	     /* styli max tilt in X directory */ 
-	int wcmMaxtiltY;	     /* styli max tilt in Y directory */ 
+	int wcmMaxContacts;          /* MT device max number of contacts */
+
+	/*
+	 * TODO Remove wcmTiltOff*, once the kernel drivers reporting
+	 * 	non-zero-centered tilt values are no longer in use.
+	 */
+	int wcmTiltOffX;	     /* styli tilt offset in X direction */
+	int wcmTiltOffY;	     /* styli tilt offset in Y direction */
+	double wcmTiltFactX;	     /* styli tilt factor in X direction */
+	double wcmTiltFactY;	     /* styli tilt factor in Y direction */
+	int wcmTiltMinX;	     /* styli min reported tilt in X direction */
+	int wcmTiltMinY;	     /* styli min reported tilt in Y direction */
+	int wcmTiltMaxX;	     /* styli max reported tilt in X direction */
+	int wcmTiltMaxY;	     /* styli max reported tilt in Y direction */
 
 	int wcmMaxStripX;            /* Maximum fingerstrip X */
 	int wcmMaxStripY;            /* Maximum fingerstrip Y */
@@ -479,6 +497,10 @@ struct _WacomCommonRec
 
 	/* DO NOT TOUCH THIS. use wcmRefCommon() instead */
 	int refcnt;			/* number of devices sharing this struct */
+
+#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 16
+	ValuatorMask *touch_mask;
+#endif
 };
 
 #define HANDLE_TILT(comm) ((comm)->wcmFlags & TILT_ENABLED_FLAG)

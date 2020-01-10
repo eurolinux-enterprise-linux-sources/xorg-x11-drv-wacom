@@ -1,5 +1,5 @@
 /*
- * Copyright 2009 - 2010 by Ping Cheng, Wacom. <pingc@wacom.com>
+ * Copyright 2009 - 2013 by Ping Cheng, Wacom. <pingc@wacom.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -35,32 +35,35 @@ static Bool wcmCheckSource(InputInfoPtr pInfo, dev_t min_maj)
 	int match = 0;
 	InputInfoPtr pDevices = xf86FirstLocalDevice();
 
-	for (; pDevices != NULL; pDevices = pDevices->next)
+	for (; !match && pDevices != NULL; pDevices = pDevices->next)
 	{
 		char* device = xf86CheckStrOption(pDevices->options, "Device", NULL);
 
 		/* device can be NULL on some distros */
-		if (!device || !strstr(pDevices->drv->driverName, "wacom"))
+		if (!device)
+			continue;
+
+		free(device);
+
+		if (!strstr(pDevices->drv->driverName, "wacom"))
 			continue;
 
 		if (pInfo != pDevices)
 		{
 			WacomCommonPtr pCommon = ((WacomDevicePtr)pDevices->private)->common;
-			char* fsource = xf86CheckStrOption(pInfo->options, "_source", NULL);
-			char* psource = xf86CheckStrOption(pDevices->options, "_source", NULL);
+			char* fsource = xf86CheckStrOption(pInfo->options, "_source", "");
+			char* psource = xf86CheckStrOption(pDevices->options, "_source", "");
 
 			if (pCommon->min_maj &&
 				pCommon->min_maj == min_maj)
 			{
 				/* only add the new tool if the matching major/minor
 				* was from the same source */
-				if ((!fsource && !psource) ||
-				    (fsource && psource && strcmp(fsource, psource)))
-				{
+				if (strcmp(fsource, psource))
 					match = 1;
-					break;
-				}
 			}
+			free(fsource);
+			free(psource);
 		}
 	}
 	if (match)
@@ -113,6 +116,7 @@ int wcmIsDuplicate(const char* device, InputInfoPtr pInfo)
 		isInUse = 4;
 	}
 ret:
+	free(lsource);
 	return isInUse;
 }
 
@@ -135,13 +139,15 @@ Bool wcmIsAValidType(InputInfoPtr pInfo, const char* type)
 	int j, k, ret = FALSE;
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
 	WacomCommonPtr common = priv->common;
-	char* dsource = xf86CheckStrOption(pInfo->options, "_source", NULL);
+	char* dsource;
 
 	if (!type)
 	{
 		xf86Msg(X_ERROR, "%s: No type specified\n", pInfo->name);
 		return FALSE;
 	}
+
+	dsource = xf86CheckStrOption(pInfo->options, "_source", NULL);
 
 	/* walkthrough all types */
 	for (j = 0; j < ARRAY_SIZE(wcmType); j++)
@@ -176,6 +182,7 @@ Bool wcmIsAValidType(InputInfoPtr pInfo, const char* type)
 		xf86Msg(X_ERROR, "%s: Invalid type '%s' for this device.\n",
 			pInfo->name, type);
 
+	free(dsource);
 	return ret;
 }
 
@@ -190,10 +197,14 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 
 	switch (priv->common->tablet_id)
 	{
+		case 0xF8:  /* Cintiq 24HDT */
 		case 0xF4:  /* Cintiq 24HD */
 			TabletSetFeature(priv->common, WCM_DUALRING | WCM_LCD);
 			/* fall through */
 
+		case 0x314: /* Intuos Pro S */
+		case 0x315: /* Intuos Pro M */
+		case 0x317: /* Intuos Pro L */
 		case 0x26:  /* I5 */
 		case 0x27:  /* I5 */
 		case 0x28:  /* I5 */
@@ -255,6 +266,7 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 		case 0xC6:  /* CintiqV5 */
 		case 0xCC:  /* CinitqV5 */
 		case 0xFA:  /* Cintiq 22HD */
+		case 0x5B:  /* Cintiq 22HDT Pen */
 			TabletSetFeature(priv->common, WCM_LCD);
 			/* fall through */
 		case 0xB0:  /* I3 */
@@ -267,11 +279,17 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 			TabletSetFeature(priv->common, WCM_STRIP | WCM_ROTATION);
 			break;
 
+		case 0x100: /* TPC with MT */
+		case 0x101: /* TPC with MT */
+		case 0x10D: /* TPC with MT */
+		case 0x4001: /* TPC with MT */
 		case 0xE2: /* TPC with 2FGT */
 		case 0xE3: /* TPC with 2FGT */
+		case 0xE5: /* TPC with MT */
 		case 0xE6: /* TPC with 2FGT */
 		case 0x93: /* TPC with 1FGT */
 		case 0x9A: /* TPC with 1FGT */
+		case 0xEC: /* TPC with 1FGT */
 		case 0xED: /* TPC with 1FGT */
 		case 0x90: /* TPC */
 		case 0x97: /* TPC */
@@ -280,6 +298,12 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 			break;
 
 		case 0x9F:
+		case 0xF6: /* Cintiq 24HDT Touch */
+		case 0x57: /* DTK2241 */
+		case 0x59: /* DTH2242 Pen */
+		case 0x5D: /* DTH2242 Touch */
+		case 0x5E: /* Cintiq 22HDT Touch */
+		case 0x304:/* Cintiq 13HD */
 			TabletSetFeature(priv->common, WCM_LCD);
 			break;
 	}
@@ -324,8 +348,8 @@ input_option_new(InputOption *list, char *key, char *value)
 	InputOption *new;
 
 	new = calloc(1, sizeof(InputOption));
-	new->key = key;
-	new->value = value;
+	new->key = strdup(key);
+	new->value = strdup(value);
 	new->next = list;
 	return new;
 }
@@ -361,7 +385,7 @@ static InputOption *wcmOptionDupConvert(InputInfoPtr pInfo, const char* basename
 	WacomToolPtr ser = common->serials;
 	InputOption *iopts = NULL;
 	char *name;
-	pointer options;
+	pointer options, o;
 	int rc;
 
 #if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 12
@@ -399,13 +423,15 @@ static InputOption *wcmOptionDupConvert(InputInfoPtr pInfo, const char* basename
 
 	free(name);
 
-	while(options)
+	o = options;
+	while(o)
 	{
 		iopts = input_option_new(iopts,
-					 xf86OptionName(options),
-					 xf86OptionValue(options));
-		options = xf86NextOption(options);
+					 xf86OptionName(o),
+					 xf86OptionValue(o));
+		o = xf86NextOption(o);
 	}
+	xf86OptionListFree(options);
 	return iopts;
 }
 
@@ -421,10 +447,12 @@ static InputAttributes* wcmDuplicateAttributes(InputInfoPtr pInfo,
 {
 	int rc;
 	InputAttributes *attr;
+	char *product;
+
 	attr = DuplicateInputAttributes(pInfo->attrs);
-	rc = asprintf(&attr->product, "%s %s", attr->product, type);
-	if (rc == -1)
-		attr->product = NULL;
+	rc = asprintf(&product, "%s %s", attr->product, type);
+	free(attr->product);
+	attr->product = (rc != -1) ? product : NULL;
 	return attr;
 }
 #endif
@@ -569,16 +597,20 @@ void wcmHotplugOthers(InputInfoPtr pInfo, const char *basename)
  * This changes the source to _driver/wacom, all auto-hotplugged devices
  * will have the same source.
  */
-int wcmNeedAutoHotplug(InputInfoPtr pInfo, const char **type)
+int wcmNeedAutoHotplug(InputInfoPtr pInfo, char **type)
 {
 	char *source = xf86CheckStrOption(pInfo->options, "_source", NULL);
 	int i;
+	int rc = 0;
 
 	if (*type) /* type specified, don't hotplug */
-		return 0;
+		goto out;
+
+	if (!source) /* xorg.conf device, don't auto-pick type */
+		goto out;
 
 	if (source && strcmp(source, "server/hal") && strcmp(source, "server/udev"))
-		return 0;
+		goto out;
 
 	/* no type specified, so we need to pick the first one applicable
 	 * for our device */
@@ -586,13 +618,14 @@ int wcmNeedAutoHotplug(InputInfoPtr pInfo, const char **type)
 	{
 		if (wcmIsAValidType(pInfo, wcmType[i].type))
 		{
+			free(*type);
 			*type = strdup(wcmType[i].type);
 			break;
 		}
 	}
 
 	if (!*type)
-		return 0;
+		goto out;
 
 	xf86Msg(X_INFO, "%s: type not specified, assuming '%s'.\n", pInfo->name, *type);
 	xf86Msg(X_INFO, "%s: other types will be automatically added.\n", pInfo->name);
@@ -601,7 +634,11 @@ int wcmNeedAutoHotplug(InputInfoPtr pInfo, const char **type)
 	pInfo->options = xf86AddNewOption(pInfo->options, "Type", *type);
 	pInfo->options = xf86ReplaceStrOption(pInfo->options, "_source", "_driver/wacom");
 
-	return 1;
+	rc = 1;
+
+	free(source);
+out:
+	return rc;
 }
 
 int wcmParseSerials (InputInfoPtr pInfo)
@@ -728,6 +765,8 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 		 */
 	}
 
+	free(s);
+
 	/* Pad is always in absolute mode.
 	 * The pad also defaults to wheel scrolling, unlike the pens
 	 * (interesting effects happen on ArtPen and others with build-in
@@ -735,8 +774,8 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 	 */
 	if (IsPad(priv))
 	{
-		priv->wheelup = priv->wheel2up = 4;
-		priv->wheeldn = priv->wheel2dn = 5;
+		priv->wheel_default[WHEEL_ABS_UP] = priv->wheel_default[WHEEL2_ABS_UP] = 4;
+		priv->wheel_default[WHEEL_ABS_DN] = priv->wheel_default[WHEEL2_ABS_DN] = 5;
 		set_absolute(pInfo, TRUE);
 	}
 
@@ -764,6 +803,7 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 					" device\n", pInfo->name);
 		else
 			wcmRotateTablet(pInfo, rotation);
+		free(s);
 	}
 
 	common->wcmRawSample = xf86SetIntOption(pInfo->options, "RawSample",
@@ -785,10 +825,6 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 			common->wcmSuppress = DEFAULT_SUPPRESS;
 	}
 
-	if (xf86SetBoolOption(pInfo->options, "Tilt",
-			(common->wcmFlags & TILT_REQUEST_FLAG)))
-		common->wcmFlags |= TILT_REQUEST_FLAG;
-
 	/* pressure curve takes control points x1,y1,x2,y2
 	 * values in range from 0..100.
 	 * Linear curve is 0,0,100,100
@@ -806,6 +842,7 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 		else
 			wcmSetPressureCurve(priv,a,b,c,d);
 	}
+	free(s);
 
 	/*Serials of tools we want hotpluged*/
 	if (wcmParseSerials (pInfo) != 0)
@@ -842,7 +879,7 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 
 		if(toollist) /* Already have a tool with the same type/serial */
 		{
-			xf86Msg(X_ERROR, "%s: already have a tool with type/serial %d/%d.",
+			xf86Msg(X_ERROR, "%s: already have a tool with type/serial %d/%d.\n",
 					pInfo->name, tool->typeid, tool->serial);
 			goto error;
 		} else /* No match on existing tool/serial, add tool to the end of the list */
@@ -888,6 +925,11 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 		else if (touch_is_on != common->wcmTouch)
 			xf86Msg(X_WARNING, "%s: Touch option can only be set "
 				"by a touch tool.\n", pInfo->name);
+
+		if (TabletHasFeature(common, WCM_1FGT))
+			common->wcmMaxContacts = 1;
+		else
+			common->wcmMaxContacts = 2;
 	}
 
 	/* 2FG touch device */
@@ -916,15 +958,15 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 	/* Swap stylus buttons 2 and 3 for Tablet PCs */
 	if (TabletHasFeature(common, WCM_TPC) && IsStylus(priv))
 	{
-		priv->button[1] = 3;
-		priv->button[2] = 2;
+		priv->button_default[1] = 3;
+		priv->button_default[2] = 2;
 	}
 
 	for (i=0; i<WCM_MAX_BUTTONS; i++)
 	{
 		char b[12];
 		sprintf(b, "Button%d", i+1);
-		priv->button[i] = xf86SetIntOption(pInfo->options, b, priv->button[i]);
+		priv->button_default[i] = xf86SetIntOption(pInfo->options, b, priv->button_default[i]);
 	}
 
 	/* Now parse class-specific options */
@@ -934,7 +976,6 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 
 	return TRUE;
 error:
-	free(tool);
 	return FALSE;
 }
 

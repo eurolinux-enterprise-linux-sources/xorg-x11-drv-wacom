@@ -1,6 +1,6 @@
 /*
  * Copyright 1995-2002 by Frederic Lepied, France. <Lepied@XFree86.org>
- * Copyright 2002-2010 by Ping Cheng, Wacom. <pingc@wacom.com>
+ * Copyright 2002-2013 by Ping Cheng, Wacom. <pingc@wacom.com>
  *                                                                            
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -71,21 +71,21 @@ static int wcmAllocate(InputInfoPtr pInfo)
 	/* Default button and expresskey values, offset buttons 4 and higher
 	 * by the 4 scroll buttons. */
 	for (i=0; i<WCM_MAX_BUTTONS; i++)
-		priv->button[i] = (i < 3) ? i + 1 : i + 5;
+		priv->button_default[i] = (i < 3) ? i + 1 : i + 5;
 
-	priv->nbuttons = WCM_MAX_BUTTONS;		/* Default number of buttons */
-	priv->relup = 5;			/* Default relative wheel up event */
-	priv->reldn = 4;			/* Default relative wheel down event */
+	priv->nbuttons = WCM_MAX_BUTTONS;       /* Default number of buttons */
+	priv->wheel_default[WHEEL_REL_UP] = 5;
+	priv->wheel_default[WHEEL_REL_DN] = 4;
 	/* wheel events are set to 0, but the pad overwrites this default
 	 * later in wcmParseOptions, when we have IsPad() available */
-	priv->wheelup = 0;			/* Default absolute wheel up event */
-	priv->wheeldn = 0;			/* Default absolute wheel down event */
-	priv->wheel2up = 0;                     /* Default absolute wheel2 up event */
-	priv->wheel2dn = 0;                     /* Default absolute wheel2 down event */
-	priv->striplup = 4;			/* Default left strip up event */
-	priv->stripldn = 5;			/* Default left strip down event */
-	priv->striprup = 4;			/* Default right strip up event */
-	priv->striprdn = 5;			/* Default right strip down event */
+	priv->wheel_default[WHEEL_ABS_UP] = 0;
+	priv->wheel_default[WHEEL_ABS_DN] = 0;
+	priv->wheel_default[WHEEL2_ABS_UP] = 0;
+	priv->wheel_default[WHEEL2_ABS_DN] = 0;
+	priv->strip_default[STRIP_LEFT_UP] = 4;
+	priv->strip_default[STRIP_LEFT_DN] = 5;
+	priv->strip_default[STRIP_RIGHT_UP] = 4;
+	priv->strip_default[STRIP_RIGHT_DN] = 5;
 	priv->naxes = 6;			/* Default number of axes */
 
 	/* JEJ - throttle sampling code */
@@ -396,27 +396,24 @@ static void wcmLinkTouchAndPen(InputInfoPtr pInfo)
 	InputInfoPtr device = xf86FirstLocalDevice();
 	WacomCommonPtr tmpcommon = NULL;
 	WacomDevicePtr tmppriv = NULL;
-	Bool touch_device_assigned = FALSE;
 
-	/* Lookup to find the associated pen and touch */
+	/* Lookup to find the associated pen and touch with same product id */
 	for (; device != NULL; device = device->next)
 	{
 		if (!strcmp(device->drv->driverName, "wacom"))
 		{
 			tmppriv = (WacomDevicePtr) device->private;
 			tmpcommon = tmppriv->common;
-			touch_device_assigned = (common->wcmTouchDevice ||
-						tmpcommon->wcmTouchDevice);
 
 			/* skip the same tool or already linked devices */
-			if ((tmppriv == priv) || touch_device_assigned)
+			if ((tmppriv == priv) || tmpcommon->wcmTouchDevice)
 				continue;
 
 			if (tmpcommon->tablet_id == common->tablet_id)
 			{
-				if (IsTouch(tmppriv) && IsPen(priv))
+				if (IsTouch(tmppriv) && IsTablet(priv))
 					common->wcmTouchDevice = tmppriv;
-				else if (IsTouch(priv) && IsPen(tmppriv))
+				else if (IsTouch(priv) && IsTablet(tmppriv))
 					tmpcommon->wcmTouchDevice = priv;
 
 				if (common->wcmTouchDevice ||
@@ -426,6 +423,37 @@ static void wcmLinkTouchAndPen(InputInfoPtr pInfo)
 					TabletSetFeature(tmpcommon, WCM_PENTOUCH);
 				}
 			}
+
+			if (common->wcmTouchDevice)
+				return;
+		}
+	}
+
+	/* Lookup for pen and touch devices with different product ids */
+	for (; device != NULL; device = device->next)
+	{
+		if (!strcmp(device->drv->driverName, "wacom"))
+		{
+			tmppriv = (WacomDevicePtr) device->private;
+			tmpcommon = tmppriv->common;
+
+			/* skip the same tool or already linked devices */
+			if ((tmppriv == priv) || tmpcommon->wcmTouchDevice)
+				continue;
+
+			if (IsTouch(tmppriv) && IsTablet(priv))
+				common->wcmTouchDevice = tmppriv;
+			else if (IsTouch(priv) && IsTablet(tmppriv))
+				tmpcommon->wcmTouchDevice = priv;
+
+			if (common->wcmTouchDevice || tmpcommon->wcmTouchDevice)
+			{
+				TabletSetFeature(common, WCM_PENTOUCH);
+				TabletSetFeature(tmpcommon, WCM_PENTOUCH);
+			}
+
+			if (common->wcmTouchDevice)
+				return;
 		}
 	}
 }
@@ -441,8 +469,10 @@ static void wcmLinkTouchAndPen(InputInfoPtr pInfo)
  */
 static int wcmIsHotpluggedDevice(InputInfoPtr pInfo)
 {
-	char *source = xf86CheckStrOption(pInfo->options, "_source", NULL);
-	return (!source || !strcmp(source, "_driver/wacom"));
+	char *source = xf86CheckStrOption(pInfo->options, "_source", "");
+	int matches = (strcmp(source, "_driver/wacom") == 0);
+	free(source);
+	return matches;
 }
 
 /* wcmPreInit - called for each input devices with the driver set to
@@ -482,8 +512,8 @@ static int wcmPreInit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
 {
 	WacomDevicePtr priv = NULL;
 	WacomCommonPtr common = NULL;
-	const char*	type;
-	const char*	device, *oldname;
+	char		*type, *device;
+	char		*oldname = NULL;
 	int		need_hotplug = 0, is_dependent = 0;
 
 	gWacomModule.wcmDrv = drv;
@@ -533,7 +563,7 @@ static int wcmPreInit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
 
 	common->debugLevel = xf86SetIntOption(pInfo->options,
 					      "CommonDBG", common->debugLevel);
-	oldname = pInfo->name;
+	oldname = strdup(pInfo->name);
 
 	if (wcmIsHotpluggedDevice(pInfo))
 		is_dependent = 1;
@@ -544,6 +574,7 @@ static int wcmPreInit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
 		char *new_name;
 		if (asprintf(&new_name, "%s %s", pInfo->name, type) == -1)
 			new_name = strdup(pInfo->name);
+		free(pInfo->name);
 		pInfo->name = priv->name = new_name;
 	}
 
@@ -575,11 +606,14 @@ static int wcmPreInit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
 		pInfo->fd = -1;
 	}
 
-	/* only link them once per port. We need to try for both pen and touch
-	 * since we do not know which tool (touch or pen) will be added first.
+	/* only link them once per port. We need to try for both tablet tool
+	 * and touch since we do not know which tool will be added first.
 	 */
-	if (IsTouch(priv) || (IsPen(priv) && !common->wcmTouchDevice))
+	if (IsTouch(priv) || (IsTablet(priv) && !common->wcmTouchDevice))
 		wcmLinkTouchAndPen(pInfo);
+
+	free(type);
+	free(oldname);
 
 	return Success;
 
@@ -594,6 +628,8 @@ SetupProc_fail:
 		pInfo->fd = -1;
 	}
 
+	free(type);
+	free(oldname);
 	return BadMatch;
 }
 
@@ -623,6 +659,9 @@ static pointer wcmPlug(pointer module, pointer options, int* errmaj,
 		int* errmin)
 {
 	xf86AddInputDriver(&WACOM, module, 0);
+
+	usbListModels();
+
 	return module;
 }
 

@@ -223,8 +223,9 @@ static int wcmInitAxes(DeviceIntPtr pWcm)
 	if (IsPen(priv))
 	{
 		label = XIGetKnownProperty(AXIS_LABEL_PROP_ABS_TILT_X),
-		min = -64;
-		max = 63;
+		min_res = max_res = res = round(TILT_RES);
+		min = TILT_MIN;
+		max = TILT_MAX;
 	}
 	else if (IsCursor(priv))
 	{
@@ -251,8 +252,9 @@ static int wcmInitAxes(DeviceIntPtr pWcm)
 	if (IsPen(priv))
 	{
 		label = XIGetKnownProperty(AXIS_LABEL_PROP_ABS_TILT_Y);
-		min = -64;
-		max = 63;
+		min_res = max_res = res = round(TILT_RES);
+		min = TILT_MIN;
+		max = TILT_MAX;
 	}
 	else if (IsCursor(priv))
 	{
@@ -294,20 +296,21 @@ static int wcmInitAxes(DeviceIntPtr pWcm)
 
 
 	/* seventh valuator: abswheel2 */
-	index = 6;
-	label = None;
-	mode = Absolute;
-	min_res = max_res = res = 1;
-	min = 0;
-	max = 1;
-
 	if ((TabletHasFeature(common, WCM_DUALRING)) && IsPad(priv))
-	{ /* XXX: what is this axis label? */
+	{
+		/* XXX: what is this axis label? */
+		index = 6;
+		label = None;
+		mode = Absolute;
+		min_res = max_res = res = 1;
+		min = 0;
+		max = 1;
+
 		min = MIN_PAD_RING;
 		max = MAX_PAD_RING;
-	}
 
-	wcmInitAxis(pInfo->dev, index, label, min, max, res, min_res, max_res, mode);
+		wcmInitAxis(pInfo->dev, index, label, min, max, res, min_res, max_res, mode);
+	}
 
 	return TRUE;
 }
@@ -321,6 +324,7 @@ static int wcmDevInit(DeviceIntPtr pWcm)
 {
 	InputInfoPtr pInfo = (InputInfoPtr)pWcm->public.devicePrivate;
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
+	WacomCommonPtr common =	priv->common;
 	unsigned char butmap[WCM_MAX_BUTTONS+1];
 	int nbaxes, nbbuttons, nbkeys;
 	int loop;
@@ -417,6 +421,19 @@ static int wcmDevInit(DeviceIntPtr pWcm)
 		return FALSE;
 	}
 
+#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 16
+	if (IsTouch(priv)) {
+		if (!InitTouchClassDeviceStruct(pInfo->dev, common->wcmMaxContacts,
+						TabletHasFeature(common, WCM_LCD) ? XIDirectTouch : XIDependentTouch,
+						2))
+		{
+			xf86Msg(X_ERROR, "Unable to init touch class device struct!\n");
+			return FALSE;
+		}
+		priv->common->touch_mask = valuator_mask_new(2);
+	}
+#endif
+
 	if (!IsPad(priv))
 	{
 		wcmInitialToolSize(pInfo);
@@ -467,7 +484,7 @@ Bool wcmIsWacomDevice (char* fname)
  ****************************************************************************/
 #define DEV_INPUT_EVENT "/dev/input/event%d"
 #define EVDEV_MINORS    32
-const char *wcmEventAutoDevProbe (InputInfoPtr pInfo)
+char *wcmEventAutoDevProbe (InputInfoPtr pInfo)
 {
 	/* We are trying to find the right eventX device */
 	int i, wait = 0;
@@ -490,7 +507,7 @@ const char *wcmEventAutoDevProbe (InputInfoPtr pInfo)
 				xf86ReplaceStrOption(pInfo->options, "Device", fname);
 
 				/* this assumes there is only one Wacom device on the system */
-				return xf86FindOptionValue(pInfo->options, "Device");
+				return xf86CheckStrOption(pInfo->options, "Device", NULL);
 			}
 		}
 		wait += 100;
@@ -845,7 +862,10 @@ static int wcmDevProc(DeviceIntPtr pWcm, int what)
 			}
 			pWcm->public.on = FALSE;
 			break;
-
+#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) * 100 + GET_ABI_MINOR(ABI_XINPUT_VERSION) >= 1901
+		case DEVICE_ABORT:
+			break;
+#endif
 		default:
 			xf86Msg(X_ERROR, "%s: invalid mode=%d. This is an X server bug.\n",
 				pInfo->name, what);

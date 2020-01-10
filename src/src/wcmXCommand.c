@@ -103,6 +103,57 @@ Atom prop_debuglevels;
 #endif
 
 /**
+ * Resets an arbitrary Action property, given a pointer to the old
+ * handler and information about the new Action.
+ */
+static void wcmResetAction(InputInfoPtr pInfo, const char *name, int index,
+                           Atom *handler, unsigned int (*action)[256],
+                           unsigned int (*new_action)[256], Atom prop, int nprop)
+{
+	handler[index] = MakeAtom(name, strlen(name), TRUE);
+	memset(action[index], 0, sizeof(action[index]));
+	memcpy(action[index], *new_action, sizeof(*new_action));
+	XIChangeDeviceProperty(pInfo->dev, handler[index], XA_INTEGER, 32,
+			       PropModeReplace, 1, (char*)new_action, FALSE);
+}
+
+static void wcmResetButtonAction(InputInfoPtr pInfo, int button, int nbuttons)
+{
+	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
+	unsigned int new_action[256] = {};
+	int x11_button = priv->button_default[button];
+	char name[64];
+
+	sprintf(name, "Wacom button action %d", button);
+	new_action[0] = AC_BUTTON | AC_KEYBTNPRESS | x11_button;
+	wcmResetAction(pInfo, name, button, priv->btn_actions, priv->keys, &new_action, prop_btnactions, nbuttons);
+}
+
+static void wcmResetStripAction(InputInfoPtr pInfo, int index)
+{
+	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
+	unsigned int new_action[256] = {};
+	char name[64];
+
+	sprintf(name, "Wacom strip action %d", index);
+	new_action[0] =	AC_BUTTON | AC_KEYBTNPRESS | (priv->strip_default[index]);
+	new_action[1] = AC_BUTTON | (priv->strip_default[index]);
+	wcmResetAction(pInfo, name, index, priv->strip_actions, priv->strip_keys, &new_action, prop_strip_buttons, 4);
+}
+
+static void wcmResetWheelAction(InputInfoPtr pInfo, int index)
+{
+	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
+	unsigned int new_action[256] = {};
+	char name[64];
+
+	sprintf(name, "Wacom wheel action %d", index);
+	new_action[0] = AC_BUTTON | AC_KEYBTNPRESS | (priv->wheel_default[index]);
+	new_action[1] = AC_BUTTON | (priv->wheel_default[index]);
+	wcmResetAction(pInfo, name, index, priv->wheel_actions, priv->wheel_keys, &new_action, prop_wheel_buttons, 6);
+}
+
+/**
  * Registers a property for the input device. This function registers
  * the property name atom, as well as creates the property itself.
  * At creation, the property values are initialized from the 'values'
@@ -157,7 +208,7 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 	WacomCommonPtr common = priv->common;
 	int values[WCM_MAX_BUTTONS];
-	int nbuttons;
+	int i;
 
 	DBG(10, priv, "\n");
 
@@ -176,7 +227,9 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 	}
 
 	values[0] = common->wcmRotate;
-	prop_rotation = InitWcmAtom(pInfo->dev, WACOM_PROP_ROTATION, XA_INTEGER, 8, 1, values);
+	if (!IsPad(priv)) {
+		prop_rotation = InitWcmAtom(pInfo->dev, WACOM_PROP_ROTATION, XA_INTEGER, 8, 1, values);
+	}
 
 	if (IsPen(priv) || IsTouch(priv)) {
 		values[0] = priv->nPressCtrl[0];
@@ -227,21 +280,24 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 	values[0] = MakeAtom(pInfo->type_name, strlen(pInfo->type_name), TRUE);
 	prop_tooltype = InitWcmAtom(pInfo->dev, WACOM_PROP_TOOL_TYPE, XA_ATOM, 32, 1, values);
 
-
-	/* default to no actions */
-	nbuttons = min(max(priv->nbuttons + 4, 7), WCM_MAX_BUTTONS);
 	memset(values, 0, sizeof(values));
-	prop_btnactions = InitWcmAtom(pInfo->dev, WACOM_PROP_BUTTON_ACTIONS, XA_ATOM, 32, nbuttons, values);
+	prop_btnactions = InitWcmAtom(pInfo->dev, WACOM_PROP_BUTTON_ACTIONS, XA_ATOM, 32, priv->nbuttons, values);
+	for (i = 0; i < priv->nbuttons; i++)
+		wcmResetButtonAction(pInfo, i, priv->nbuttons);
 
 	if (IsPad(priv)) {
 		memset(values, 0, sizeof(values));
 		prop_strip_buttons = InitWcmAtom(pInfo->dev, WACOM_PROP_STRIPBUTTONS, XA_ATOM, 32, 4, values);
+		for (i = 0; i < 4; i++)
+			wcmResetStripAction(pInfo, i);
 	}
 
 	if (IsPad(priv) || IsCursor(priv))
 	{
 		memset(values, 0, sizeof(values));
 		prop_wheel_buttons = InitWcmAtom(pInfo->dev, WACOM_PROP_WHEELBUTTONS, XA_ATOM, 32, 6, values);
+		for (i = 0; i < 6; i++)
+			wcmResetWheelAction(pInfo, i);
 	}
 
 	values[0] = common->vendor_id;
@@ -264,21 +320,83 @@ static int wcmFindProp(Atom property, Atom *prop_list, int nprops)
 	/* check all properties used for button actions */
 	for (i = 0; i < nprops; i++)
 		if (prop_list[i] == property)
-			break;
+			return i;
 
-	if (i >= nprops)
-		return -BadAtom;
-
-	return i;
+	return -BadAtom;
 }
 
-static int wcmSanityCheckProperty(XIPropertyValuePtr prop)
+/**
+ * Obtain a pointer to the the handler and action list for a given Action
+ * property. This function searches the button, wheel, and strip property
+ * handler lists.
+ *
+ * @param priv          The device whose handler lists should be searched
+ * @param property      The Action property that should be searched for
+ * @param[out] handler  Returns a pointer to the property's handler
+ * @param[out] action   Returns a pointer to the property's action list
+ * @return              'true' if the property was found. Neither out parameter
+ *                      will be null if this is the case.
+ */
+static BOOL wcmFindActionHandler(WacomDevicePtr priv, Atom property, Atom **handler, unsigned int (**action)[256])
+{
+	int offset;
+
+	offset = wcmFindProp(property, priv->btn_actions, ARRAY_SIZE(priv->btn_actions));
+	if (offset >=0)
+	{
+		*handler = &priv->btn_actions[offset];
+		*action  = &priv->keys[offset];
+		return TRUE;
+	}
+
+	offset = wcmFindProp(property, priv->wheel_actions, ARRAY_SIZE(priv->wheel_actions));
+	if (offset >= 0)
+	{
+		*handler = &priv->wheel_actions[offset];
+		*action  = &priv->wheel_keys[offset];
+		return TRUE;
+	}
+
+	offset = wcmFindProp(property, priv->strip_actions, ARRAY_SIZE(priv->strip_actions));
+	if (offset >= 0)
+	{
+		*handler = &priv->strip_actions[offset];
+		*action  = &priv->strip_keys[offset];
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static int wcmCheckActionProperty(WacomDevicePtr priv, Atom property, XIPropertyValuePtr prop)
 {
 	CARD32 *data;
 	int j;
 
-	if (prop->size >= 255 || prop->format != 32 || prop->type != XA_INTEGER)
+	if (!property) {
+		DBG(3, priv, "ERROR: Atom is NONE\n");
 		return BadMatch;
+	}
+
+	if (prop == NULL) {
+		DBG(3, priv, "ERROR: Value is NULL\n");
+		return BadMatch;
+	}
+
+	if (prop->size >= 255) {
+		DBG(3, priv, "ERROR: Too many values (%ld > 255)\n", prop->size);
+		return BadMatch;
+	}
+
+	if (prop->format != 32) {
+		DBG(3, priv, "ERROR: Incorrect value format (%d != 32)\n", prop->format);
+		return BadMatch;
+	}
+
+	if (prop->type != XA_INTEGER) {
+		DBG(3, priv, "ERROR: Incorrect value type (%d != XA_INTEGER)\n", prop->type);
+		return BadMatch;
+	}
 
 	data = (CARD32*)prop->data;
 
@@ -287,19 +405,25 @@ static int wcmSanityCheckProperty(XIPropertyValuePtr prop)
 		int code = data[j] & AC_CODE;
 		int type = data[j] & AC_TYPE;
 
+		DBG(10, priv, "Index %d == %d (type: %d, code: %d)\n", j, data[j], type, code);
+
 		switch(type)
 		{
 			case AC_KEY:
 				break;
 			case AC_BUTTON:
-				if (code > WCM_MAX_BUTTONS)
+				if (code > WCM_MAX_X11BUTTON) {
+					DBG(3, priv, "ERROR: AC_BUTTON code too high (%d > %d)\n", code, WCM_MAX_X11BUTTON);
 					return BadValue;
+				}
 				break;
 			case AC_DISPLAYTOGGLE:
 			case AC_MODETOGGLE:
 				break;
 			default:
+				DBG(3, priv, "ERROR: Unknown command\n");
 				return BadValue;
+				break;
 		}
 	}
 
@@ -307,98 +431,60 @@ static int wcmSanityCheckProperty(XIPropertyValuePtr prop)
 }
 
 /**
- * Store the new value of the property in one of the driver's internal
- * property handler lists. Properties stored there will be checked for value
- * changes whenever updated.
+ * An 'Action' property (such as an element of "Wacom Button Actions")
+ * defines an action to be performed for some event. The property is
+ * validated, and then saved for later use. Both the property itself
+ * (as 'handler') and the data it references (as 'action') are saved.
+ *
+ * @param dev        The device being modified
+ * @param property   The Action property being set
+ * @param prop       The data contained in 'property'
+ * @param checkonly  'true' if the property should only be checked for validity
+ * @param handler    Pointer to the handler that must be updated
+ * @param action     Pointer to the action list that must be updated
  */
-static void wcmUpdateActionPropHandlers(XIPropertyValuePtr prop, Atom *handlers)
-{
-	int i;
-	CARD32 *values = (CARD32*)prop->data;
-
-	/* any action property needs to be registered for this handler. */
-	for (i = 0; i < prop->size; i++)
-		handlers[i] = values[i];
-}
-
-static void wcmUpdateButtonKeyActions(DeviceIntPtr dev, XIPropertyValuePtr prop,
-					unsigned int (*keys)[256], int skeys)
-{
-	Atom *values = (Atom*)prop->data;
-	XIPropertyValuePtr val;
-	int i, j;
-
-	for (i = 0; i < prop->size; i++)
-	{
-		/* keys is one based array to align with X buttons */
-		memset(keys[i+1], 0, sizeof(keys[i+1]));
-
-		if (!values[i])
-			continue;
-
-		XIGetDeviceProperty(dev, values[i], &val);
-
-		for (j = 0; j < val->size; j++)
-			keys[i+1][j] = ((unsigned int*)val->data)[j];
-	}
-}
-
-/* Change the properties that hold the actual button actions */
-static int wcmSetActionProperties(DeviceIntPtr dev, Atom property,
-				  XIPropertyValuePtr prop, BOOL checkonly)
+static int wcmSetActionProperty(DeviceIntPtr dev, Atom property,
+				XIPropertyValuePtr prop, BOOL checkonly,
+				Atom *handler, unsigned int (*action)[256])
 {
 	InputInfoPtr pInfo = (InputInfoPtr) dev->public.devicePrivate;
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
-	int i;
-	int rc;
+	int rc, i;
 
+	DBG(5, priv, "%s new actions for Atom %d\n", checkonly ? "Checking" : "Setting", property);
 
-	DBG(10, priv, "\n");
-
-	rc = wcmSanityCheckProperty(prop);
-	if (rc != Success)
+	rc = wcmCheckActionProperty(priv, property, prop);
+	if (rc != Success) {
+		const char *msg = NULL;
+		switch (rc) {
+			case BadMatch: msg = "BadMatch"; break;
+			case BadValue: msg = "BadValue"; break;
+			default: msg = "UNKNOWN"; break;
+		}
+		DBG(3, priv, "Action validation failed with code %d (%s)\n", rc, msg);
 		return rc;
-
-	i = wcmFindProp(property, priv->btn_actions, ARRAY_SIZE(priv->btn_actions));
-	if (i >= 0)
-	{
-		if (!checkonly)
-		{
-			XIGetDeviceProperty(dev, prop_btnactions, &prop);
-			wcmUpdateButtonKeyActions(dev, prop, priv->keys, ARRAY_SIZE(priv->keys));
-		}
-	} else
-	{
-		i = wcmFindProp(property, priv->wheel_actions,
-					ARRAY_SIZE(priv->wheel_actions));
-		if (i >= 0) {
-			if (!checkonly)
-			{
-				XIGetDeviceProperty(dev, prop_wheel_buttons, &prop);
-				wcmUpdateButtonKeyActions(dev, prop,
-						priv->wheel_keys,
-						ARRAY_SIZE(priv->wheel_keys));
-			}
-		} else
-		{
-			i = wcmFindProp(property, priv->strip_actions, ARRAY_SIZE(priv->strip_actions));
-			if (i >= 0 && !checkonly)
-			{
-				XIGetDeviceProperty(dev, prop_strip_buttons, &prop);
-				wcmUpdateButtonKeyActions(dev, prop, priv->strip_keys, ARRAY_SIZE(priv->strip_keys));
-			}
-		}
 	}
 
-	return abs(i);
+	if (!checkonly)
+	{
+		memset(action, 0, sizeof(*action));
+		for (i = 0; i < prop->size; i++)
+			(*action)[i] = ((unsigned int*)prop->data)[i];
+		*handler = property;
+	}
+
+	return Success;
 }
 
-static int wcmCheckActionProp(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop)
+static int wcmCheckActionsProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop)
 {
 	InputInfoPtr pInfo = (InputInfoPtr) dev->public.devicePrivate;
 	XIPropertyValuePtr val;
 	Atom *values = (Atom*)prop->data;
 	int i;
+
+	if (prop->format != 32 || prop->type != XA_ATOM)
+		return BadMatch;
 
 	for (i = 0; i < prop->size; i++)
 	{
@@ -415,167 +501,77 @@ static int wcmCheckActionProp(DeviceIntPtr dev, Atom property, XIPropertyValuePt
 	return Success;
 }
 
-/* Change the property that refers to which properties the actual button
- * actions are stored in */
-static int wcmSetPropertyButtonActions(DeviceIntPtr dev, Atom property,
-				       XIPropertyValuePtr prop, BOOL checkonly)
+/**
+ * An 'Actions' property (such as "Wacom Button Actions") stores a list of
+ * 'Action' properties that define an action to be performed. This function
+ * goes through the list of actions and saves each one.
+ *
+ * @param dev        The device being modified
+ * @param property   The Actions property being set
+ * @param prop       The data contained in 'property'
+ * @param checkonly  'true' if the property should only be checked for validity
+ * @param size       Expected number of elements in 'prop'
+ * @param handlers   List of handlers that must be updated
+ * @param actions    List of actions that must be updated
+ */
+static int wcmSetActionsProperty(DeviceIntPtr dev, Atom property,
+                                 XIPropertyValuePtr prop, BOOL checkonly,
+                                 int size, Atom* handlers, unsigned int (*actions)[256])
 {
 	InputInfoPtr pInfo = (InputInfoPtr) dev->public.devicePrivate;
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
-	int rc;
+	int rc, i;
 
 	DBG(10, priv, "\n");
 
-	if (prop->format != 32 || prop->type != XA_ATOM)
-		return BadMatch;
+	if (prop->size != size)
+		return BadValue;
 
-	/* How this works:
-	 * prop_btnactions has a list of atoms stored. Any atom references
-	 * another property on that device that contains the actual action.
-	 * If this property changes, all action-properties are queried for
-	 * their value and their value is stored in priv->key[button].
-	 *
-	 * If the button is pressed, the actions are executed.
-	 *
-	 * Any button action property needs to be monitored by this property
-	 * handler too.
-	 */
-
-	rc = wcmCheckActionProp(dev, property, prop);
+	rc = wcmCheckActionsProperty(dev, property, prop);
 	if (rc != Success)
 		return rc;
 
-	if (!checkonly)
+	for (i = 0; i < prop->size; i++)
 	{
-		wcmUpdateActionPropHandlers(prop, priv->btn_actions);
-		wcmUpdateButtonKeyActions(dev, prop, priv->keys, ARRAY_SIZE(priv->keys));
+		int index = i;
+		Atom subproperty = ((Atom*)prop->data)[i];
+		XIPropertyValuePtr subprop;
 
-	}
-	return Success;
-}
+		if (property == prop_btnactions)
+		{ /* Driver uses physical -- not X11 -- button numbering internally */
+			if (i < 3)
+				index = i;
+			else if (i < 7)
+				continue;
+			else
+				index = i - 4;
+		}
 
-struct wheel_strip_update_t {
-	/* for CARD8 values, points to fields in struct to be updated */
-	int *up1;
-	int *dn1;
-	int *up2;
-	int *dn2;
-	int *up3;
-	int *dn3;
-
-	/* for CARD32 values, points to atom array of atoms to be
-	 * monitored.*/
-	Atom *handlers;
-	/* for CARD32 values, points to key array that keeps the actual
-	   actions.*/
-	int skeys;  /* size of first keys dimensions */
-	unsigned int (*keys)[256];
-};
-
-static int wcmSetWheelOrStripProperty(DeviceIntPtr dev, Atom property,
-				      XIPropertyValuePtr prop, BOOL checkonly,
-				      struct wheel_strip_update_t *wsup)
-{
-	int rc;
-
-	union multival {
-		CARD8 *v8;
-		CARD32 *v32;
-	} values;
-
-	if ((property == prop_strip_buttons && prop->size != 4) ||
-	    (property == prop_wheel_buttons && prop->size != 6))
-		return BadValue;
-
-	/* see wcmSetPropertyButtonActions for how this works. The wheel is
-	 * slightly different in that it allows for 8 bit properties for
-	 * pure buttons too */
-
-	values.v8 = (CARD8*)prop->data;
-
-	switch (prop->format)
-	{
-		case 8:
-			if (values.v8[0] > WCM_MAX_BUTTONS ||
-			    values.v8[1] > WCM_MAX_BUTTONS ||
-			    values.v8[2] > WCM_MAX_BUTTONS ||
-			    values.v8[3] > WCM_MAX_BUTTONS ||
-			    values.v8[4] > WCM_MAX_BUTTONS ||
-			    values.v8[5] > WCM_MAX_BUTTONS)
-				return BadValue;
-
-			if (!checkonly) {
-				*wsup->up1 = values.v8[0];
-				*wsup->dn1 = values.v8[1];
-				*wsup->up2 = values.v8[2];
-				*wsup->dn2 = values.v8[3];
-				*wsup->up3 = values.v8[4];
-				*wsup->dn3 = values.v8[5];
-			}
-			break;
-		case 32:
-			rc = wcmCheckActionProp(dev, property, prop);
-			if (rc != Success)
-				return rc;
-
+		if (subproperty == 0)
+		{ /* Interpret 'None' as meaning 'reset' */
 			if (!checkonly)
 			{
-				wcmUpdateActionPropHandlers(prop, wsup->handlers);
-				wcmUpdateButtonKeyActions(dev, prop, wsup->keys,
-						          wsup->skeys);
-			}
+				if (property == prop_btnactions)
+					wcmResetButtonAction(pInfo, index, size);
+				else if (property == prop_strip_buttons)
+					wcmResetStripAction(pInfo, index);
+				else if (property == prop_wheel_buttons)
+					wcmResetWheelAction(pInfo, index);
 
-			break;
-		default:
-			return BadMatch;
+				if (subproperty != handlers[index])
+					subproperty = handlers[index];
+			}
+		}
+		else
+		{
+			XIGetDeviceProperty(dev, subproperty, &subprop);
+			rc = wcmSetActionProperty(dev, subproperty, subprop, checkonly, &handlers[index], &actions[index]);
+			if (rc != Success)
+				return rc;
+		}
 	}
 
 	return Success;
-}
-
-
-static int wcmSetWheelProperty(DeviceIntPtr dev, Atom property,
-			       XIPropertyValuePtr prop, BOOL checkonly)
-{
-	InputInfoPtr pInfo = (InputInfoPtr) dev->public.devicePrivate;
-	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
-
-	struct wheel_strip_update_t wsup = {
-		.up1 = &priv->relup,
-		.dn1 = &priv->reldn,
-		.up2 = &priv->wheelup,
-		.dn2 = &priv->wheeldn,
-		.up3 = &priv->wheel2up,
-		.dn3 = &priv->wheel2dn,
-
-		.handlers = priv->wheel_actions,
-		.keys	  = priv->wheel_keys,
-		.skeys    = 6,
-	};
-
-	return wcmSetWheelOrStripProperty(dev, property, prop, checkonly, &wsup);
-}
-
-static int wcmSetStripProperty(DeviceIntPtr dev, Atom property,
-			       XIPropertyValuePtr prop, BOOL checkonly)
-{
-	InputInfoPtr pInfo = (InputInfoPtr) dev->public.devicePrivate;
-	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
-
-	struct wheel_strip_update_t wsup = {
-		.up1 = &priv->striplup,
-		.dn1 = &priv->stripldn,
-		.up2 = &priv->striprup,
-		.dn2 = &priv->striprdn,
-		.up3 = NULL,
-		.dn3 = NULL,
-
-		.handlers = priv->strip_actions,
-		.keys	  = priv->strip_keys,
-		.skeys    = 4,
-	};
-
-	return wcmSetWheelOrStripProperty(dev, property, prop, checkonly, &wsup);
 }
 
 /**
@@ -737,9 +733,9 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 			wcmBindToSerial(pInfo, serial);
 		}
 	} else if (property == prop_strip_buttons)
-		return wcmSetStripProperty(dev, property, prop, checkonly);
+		return wcmSetActionsProperty(dev, property, prop, checkonly, ARRAY_SIZE(priv->strip_actions), priv->strip_actions, priv->strip_keys);
 	else if (property == prop_wheel_buttons)
-		return wcmSetWheelProperty(dev, property, prop, checkonly);
+		return wcmSetActionsProperty(dev, property, prop, checkonly, ARRAY_SIZE(priv->wheel_actions), priv->wheel_actions, priv->wheel_keys);
 	else if (property == prop_cursorprox)
 	{
 		CARD32 value;
@@ -850,12 +846,16 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 #endif
 	} else if (property == prop_btnactions)
 	{
-		int nbuttons = min(max(priv->nbuttons + 4, 7), WCM_MAX_BUTTONS);
-		if (prop->size != nbuttons)
-			return BadMatch;
-		wcmSetPropertyButtonActions(dev, property, prop, checkonly);
+		int nbuttons = priv->nbuttons < 4 ? priv->nbuttons : priv->nbuttons + 4;
+		return wcmSetActionsProperty(dev, property, prop, checkonly, nbuttons, priv->btn_actions, priv->keys);
 	} else
-		wcmSetActionProperties(dev, property, prop, checkonly);
+	{
+		Atom *handler = NULL;
+		unsigned int (*action)[256] = NULL;
+		if (wcmFindActionHandler(priv, property, &handler, &action))
+			return wcmSetActionProperty(dev, property, prop, checkonly, handler, action);
+		/* backwards-compatible behavior silently ignores the not-found case */
+	}
 
 	return Success;
 }
@@ -883,6 +883,43 @@ int wcmGetProperty (DeviceIntPtr dev, Atom property)
 		return XIChangeDeviceProperty(dev, property, XA_INTEGER, 32,
 					      PropModeReplace, 5,
 					      values, FALSE);
+	}
+	else if (property == prop_btnactions)
+	{
+		/* Convert the physical button representation used internally
+		 * to the X11 button representation we've historically used.
+		 * To do this, we need to skip X11 buttons 4-7 which would be
+		 * used by a scroll wheel rather than an actual button.
+		 */
+		int nbuttons = priv->nbuttons < 4 ? priv->nbuttons : priv->nbuttons + 4;
+		Atom x11_btn_actions[nbuttons];
+		int i;
+
+		for (i = 0; i < nbuttons; i++)
+		{
+			if (i < 3)
+				x11_btn_actions[i] = priv->btn_actions[i];
+			else if (i < 7)
+				x11_btn_actions[i] = 0;
+			else
+				x11_btn_actions[i] = priv->btn_actions[i-4];
+		}
+
+		return XIChangeDeviceProperty(dev, property, XA_ATOM, 32,
+		                              PropModeReplace, nbuttons,
+		                              x11_btn_actions, FALSE);
+	}
+	else if (property == prop_strip_buttons)
+	{
+		return XIChangeDeviceProperty(dev, property, XA_ATOM, 32,
+					      PropModeReplace, ARRAY_SIZE(priv->strip_actions),
+					      priv->strip_actions, FALSE);
+	}
+	else if (property == prop_wheel_buttons)
+	{
+		return XIChangeDeviceProperty(dev, property, XA_ATOM, 32,
+		                              PropModeReplace, ARRAY_SIZE(priv->wheel_actions),
+		                              priv->wheel_actions, FALSE);
 	}
 
 	return Success;
@@ -926,7 +963,7 @@ wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial, int id)
 {
 	WacomDevicePtr priv = pInfo->private;
 
-	if (priv->cur_serial == serial)
+	if (priv->cur_serial == serial && priv->cur_device_id == id)
 		return;
 
 	priv->cur_serial = serial;

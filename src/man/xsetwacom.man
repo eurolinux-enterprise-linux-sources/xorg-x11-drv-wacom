@@ -112,6 +112,14 @@ converts the button into a series of keystrokes, in this example "press a, press
 shift, press and release b, release shift, release a". In addition to the "key"
 keyword, "button" and "modetoggle" are also recognized. Multiple keywords may
 be present in one action if desired: for example "key +ctrl button 5 key -ctrl".
+
+The driver can only simulate physical key events but not keysyms and
+xetwacom translates the mapping sequence into such events. Thus,
+symbols on the same physical key will generate the same event. For
+example, '1' and '!' are on the same key on a US keyboard and thus have the
+same keycode).  For access to keys on a higher shift level, the sequence
+should be entered as it would be typed on a physical keyboard. For example,
+a exclamation mark is entered by the sequence of "key +shift 1 -shift".
 .TP
 \fBBindToSerial\fR [serial|0]
 Bind the device to the tool with the specified serial number. Once bound,
@@ -195,6 +203,11 @@ Get the serial number of the tool that was last in proximity last. This
 serial number is updated whenever the tool goes out of proximity. If the
 current tool went out of proximity once, this serial number is the one of
 the current tool. This is a read-only parameter.
+.TP
+\fBTouch\fR on|off
+If on, touch events are reported to userland, i.e., system cursor moves when
+user touches the tablet. If off, touch events are ignored. Default: on for
+devices that support touch; off for all other models.
 .TP
 \fBCursorProximity\fR distance
 sets the max distance from tablet to stop reporting movement for cursor in

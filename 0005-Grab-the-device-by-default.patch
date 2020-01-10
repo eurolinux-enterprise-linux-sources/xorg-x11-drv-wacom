@@ -1,0 +1,29 @@
+From 36c3c09c533d8a339ea18191be10ac0f999d803e Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Thu, 8 May 2014 14:02:30 +1000
+Subject: [PATCH 5/6] Grab the device by default
+
+RHEL6 backwards compat change
+Needed for 59941213fb8972abc1cd3bf3762444ab73ae1329
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmUSB.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index cf27a10..5d2fb96 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -137,7 +137,7 @@ usbStart(InputInfoPtr pInfo)
+ {
+ 	int err;
+ 
+-	if (xf86CheckBoolOption(pInfo->options, "GrabDevice", 0))
++	if (xf86CheckBoolOption(pInfo->options, "GrabDevice", 1))
+ 	{
+ 		/* Try to grab the event device so that data don't leak to /dev/input/mice */
+ 		SYSCALL(err = ioctl(pInfo->fd, EVIOCGRAB, (pointer)1));
+-- 
+1.9.0
+

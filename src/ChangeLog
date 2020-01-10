@@ -1,24 +1,1669 @@
-commit 76e5effa46139a3ff4c9bb0d70c51f3fc3267f85
-Author: Peter Hutterer <peter.hutterer@who-t.net>
-Date:   Thu Aug 23 15:20:40 2012 +1000
+commit 5395d18c4bbaa0d9ea96617ad41bd94848fb05e9
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Sep 27 16:42:39 2013 -0700
 
-    wacom 0.16.1
+    wacom 0.23.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit eef947af1447df58099a005834de394edb4b03d0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Sep 19 17:08:13 2013 -0700
+
+    wacom 0.22.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 6cadaf2eabb91e47963054e1628374861fea6209
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 11 09:55:46 2013 -0700
+
+    Correct return value of special_map_button
+    
+    The 'special_map_*' functions called by 'parse_actions' are expected
+    to return a count of the number of words of input they have consumed.
+    The 'special_map_buttom' function errounously returns the number of
+    actions added instead, causing the program to potentially skip over
+    requested actions which follow a list of "button" actions.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit cde2718ac432f5d745b9ff5ccf6d4f8c2f4fc499
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 11 09:30:37 2013 -0700
+
+    Fix buffer overflows in 'special_map_*'
+    
+    Each of the 'special_map_*' functions is given free reign to write
+    to the end of a buffer, but is never given the size of the buffer
+    itself. It is trivial to trigger an overflow simply by feeding the
+    program more actions to perform than space to store them.
+    
+    This patch adds an argument to each function which contains the
+    buffer's size. The functions check for sufficient space before
+    writing to the buffer and will print out an error message if
+    it isn't available.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 59086ba4f5caf4cf6f52f80b5ca36144a882daa5
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Sep 10 16:42:22 2013 -0700
+
+    Add support for Intuos Pro series
+    
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit cb14924a2a5be21c8525ca70932ab8b5f0f99752
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Sep 4 17:04:13 2013 +1000
+
+    strdup the option key/values in our input_option_new
+    
+    This is a interface for servers with ABI < 14 (up to server 1.11).
+    The server version of it strdups the values, so we must do the same.
+    
+    Otherwise the values assigned to the InputOption list in
+    wcmOptionDupConvert are freed during xf86OptionListFree().
+    
+    That later causes a SIGABORT when NewInputDeviceRequest starts using
+    those options.
+    
+    https://sourceforge.net/p/linuxwacom/bugs/233/
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 39c4c7fca7db19ac550332fa53d0d4f58a26f67f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Sat Aug 31 14:35:58 2013 +1000
+
+    Print list of supported models on wcmPlug
+    
+    When the driver starts, print the list of supported models. This should
+    help with any questions like "does my driver support this or that model".
+    
+    For those models that don't have a defined name, print "usb:1234:5678"
+    instead, so users can at least try to match the usb IDs.
+    
+    Sample log output:
+    [ 25950.166] (II) wacom: Driver for Wacom graphics tablets: PenPartner, PenPartner,
+            Graphire, Graphire2 4x5, Graphire2 5x7, Graphire3 4x5, Graphire3 6x8,
+            Graphire4 4x5, Graphire4 6x8, BambooFun 4x5, BambooFun 6x8,
+            Bamboo1 Medium, Graphire4 6x8 BlueTooth, CTL-460, CTH-461, CTL-660,
+            CTL-461/S, Bamboo Touch, CTH-460/K, CTH-461/S, CTH-661/S1, CTH-461/L,
+            CTH-661/L, Intuos 4x5, Intuos 6x8, Intuos 9x12, Intuos 12x12,
+            Intuos 12x18, PTU600, PL400, PL500, PL600, PL600SX, PL550, PL800,
+            PL700, PL510, PL710, DTI520, DTF720, DTF720a, DTF521, DTU1931,
+            DTU2231, DTU1631, Intuos2 4x5, Intuos2 6x8, Intuos2 9x12,
+            Intuos2 12x12, Intuos2 12x18, Intuos2 6x8 , Volito, PenStation,
+            Volito2 4x5, Volito2 2x3, PenPartner2, Bamboo, Bamboo1, Bamboo1 4x6,
+            Bamboo1 5x8, Intuos3 4x5, Intuos3 6x8, Intuos3 9x12, Intuos3 12x12,
+            Intuos3 12x19, Intuos3 6x11, Intuos3 4x6, Intuos4 4x6, Intuos4 6x9,
+            Intuos4 8x13, Intuos4 12x19, Intuos4 WL USB Endpoint,
+            Intuos4 WL Bluetooth Endpoint, Intuos5 touch S, Intuos5 touch M,
+            Intuos5 touch L, Intuos5 S, Intuos5 M, Cintiq 21UX, Cintiq 20WSX,
+            Cintiq 12WX, Cintiq 21UX2, Cintiq 24HD, Cintiq 22HD,
+            Cintiq 24HD touch (EMR digitizer), Cintiq 13HD, DTK2241, DTH2242,
+            Cintiq 22HDT, TabletPC 0x90, TabletPC 0x93, TabletPC 0x97,
+            TabletPC 0x9A, CapPlus  0x9F, TabletPC 0xE2, TabletPC 0xE3,
+            TabletPC 0xE5, TabletPC 0xE6, TabletPC 0xEC, TabletPC 0xED,
+            TabletPC 0xEF, TabletPC 0x100, TabletPC 0x101, TabletPC 0x10D,
+            TabletPC 0x4001, usb:172f:0024, usb:172f:0025, usb:172f:0026,
+            usb:172f:0027, usb:172f:0028, usb:172f:0030, usb:172f:0031,
+            usb:172f:0032, usb:172f:0033, usb:172f:0034, usb:172f:0035,
+            usb:172f:0036, usb:172f:0037, usb:172f:0038, usb:172f:0039,
+            usb:172f:0051, usb:172f:0052, usb:172f:0053, usb:172f:0054,
+            usb:172f:0055, usb:172f:0056, usb:172f:0057, usb:172f:0058,
+            usb:172f:0500, usb:172f:0501, usb:172f:0502, usb:172f:0503,
+            usb:1b96:0001, usb:17ef:6004
+    [ 25950.167] (II) Using input driver 'wacom' for 'Wacom Intuos4 6x9'
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 3f95c4c58afd25e7c8a3ab18dad936f615cfd189
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jul 15 10:09:40 2013 -0700
+
+    wacom 0.22.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit b25eb646c36d19a46c561b3c091adb5c86c563df
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Jul 12 10:28:08 2013 +1000
+
+    Fix build on ABI < 16 - touch_mask isn't defined
+    
+    Fixes: http://sourceforge.net/p/linuxwacom/bugs/232
     
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
-commit 693de7ecadd6969e1e7c3e84def3a8571218a541
+commit 4982cebdadb32376c3b1964616ede44a712c8a24
 Author: Jason Gerecke <killertofu@gmail.com>
-Date:   Tue Jul 10 09:29:01 2012 -0700
+Date:   Wed Jul 10 11:49:29 2013 -0700
 
-    Set WCM_LCD on the Cintiq 24HD
-    
-    This flag was apparently forgotten when the 24HD was originally
-    added.
+    wacom 0.22.0
     
     Signed-off-by: Jason Gerecke <killertofu@gmail.com>
-    (cherry picked from commit 58d2a675b616af9e575f0bc0dcec7950a5498c9d)
 
-commit 0ad33ac702efa42293c8153370c48fe4c05d29c8
+commit 67daf21bdb7b32c27818bffaf56849a522d23477
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Fri Jun 7 15:34:03 2013 -0700
+
+    Unify wcmFingerMultitouch and wcmSendTouchEvent
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit d0a5c68b2582fc6bdcee1d949913f78c0651b1a6
+Author: Sjoerd Simons <sjoerd@luon.net>
+Date:   Sat May 25 01:06:16 2013 +0200
+
+    Transform touch events just like all other events
+    
+    Transform touch coordinates in the same way as other events coming from
+    the wacom driver otherwise setting for exmaple the Wacom Rotation
+    property has no effect
+    
+    Signed-off-by: Sjoerd Simons <sjoerd@greynoise.nl>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8e5b56e7a461c416d5b29f338bbd749626452b5d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jul 10 13:50:55 2013 -0700
+
+    Revert "Transform touch events just like all other events"
+    
+    This reverts commit bfb56bf858e08d95156d52cec9744d3d3251b59c.
+    This commit will be split in two to provide proper credit for
+    each of the two authors.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 85b62fa528564607875a88babab11dd6d2481b04
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Tue Jul 2 11:25:59 2013 -0700
+
+    Add support for 0xEC.
+    
+    It is a Wacom device found in Samsung Ativ Smart PC Pro 700t.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit a2c57c0104e2aee3e3f2544b094d443e20f076cb
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Jul 3 09:35:30 2013 +1000
+
+    Revert "Add support for 0xED."
+    
+    Typo in commit message, tablet is actually 0xEC. Revert and re-commit to
+    make the patch easier to find.
+    
+    This reverts commit 8488c2af5bdd6dc4d049dc6d895c50c5f34aea14.
+
+commit 8488c2af5bdd6dc4d049dc6d895c50c5f34aea14
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Tue Jul 2 11:25:59 2013 -0700
+
+    Add support for 0xED.
+    
+    It is a Wacom device found in Samsung Ativ Smart PC Pro 700t.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+
+commit 361ac83d06159ec02bf33237eb5ec24652c8b700
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Fri Jun 14 16:03:18 2013 -0700
+
+    wacom 0.21.99.1
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+
+commit 4f7d24c2138685a9881c7b5314747dc17d7cc147
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Fri Jun 14 15:57:16 2013 -0700
+
+    Add xf86OptionListFree for distcheck
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+
+commit bfb56bf858e08d95156d52cec9744d3d3251b59c
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Fri Jun 7 15:34:03 2013 -0700
+
+    Transform touch events just like all other events
+    
+    Transform touch coordinates in the same way as other events coming from
+    the wacom driver otherwise setting for exmaple the Wacom Rotation
+    property has no effect
+    
+    Signed-off-by: Sjoerd Simons <sjoerd@greynoise.nl>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+
+commit f38dd5736e2df7c3eec0338bd0c7bef8c562b979
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Thu Jun 6 18:25:52 2013 -0700
+
+    Don't emulate a mouse when multitouch is enabled
+    
+    Currently when enabling XI 1.2 multitouch events the Wacom driver does a
+    strange mix of emulating a mouse (when there is only touch) and
+    switches suddenly switches to be a touchscreen when 2 fingers are down.
+    
+    Change this to only send touch events when using multitouch mode, such
+    that the touchscreen works the same as other touchscreens. This enables
+    applications to properly respond to one finger touches (e.g. panning
+    in GTK+).
+    
+    The X server core will still send emulated input events to applications
+    not supporting multitouch, so there shouldn't be a regression for those
+    applications.
+    
+    Signed-off-by: Sjoerd Simons <sjoerd@greynoise.nl>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+
+commit 3578b919360e7a4d6cfbbe4c33c3084be0c6d5c9
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Fri May 17 15:11:39 2013 -0700
+
+    Add support for Cintiq 22HDT and 13HD, DTK2241 and DTH2242.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2dffd217b112c346c6c0b07e82cb069a3cf84246
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu May 9 13:31:38 2013 +1000
+
+    Don't init abswheel2 valuator (7th val) if we don't have one
+    
+    InitValuatorAxisStruct() will return if the axisnum > num_axes and not
+    initialise anything which is why the current code worked without issues.
+    
+    With a new patch to the server this will now complain with an error message
+    to the log.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit b350a95717ac04a0bed1d836a0b90c94724dc597
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu May 9 13:45:15 2013 +1000
+
+    Free the device name after reassigning
+    
+    When hotplugging the first tool (usually the stylus) changes pInfo->name to
+    the name + tool name. Thus, free the original one.
+    
+    And strdup the oldname so we can unconditially free it, regardless of
+    whether we changed the actual device name or not.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 06abd7a61323034bd58e745a18f0b08723de0064
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu May 9 13:14:45 2013 +1000
+
+    Free the touch mask on shutdown
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 6d26cb9b9f71bfec1c388a72dcbb09f09f31bd04
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu May 9 11:21:40 2013 +1000
+
+    Free input attribute's product
+    
+    This is copied first by DuplicateInputAttributes, then asprintf makes
+    another copy.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit dff311a44c13687c12e86d8233f15bb0f8868361
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu May 9 10:55:33 2013 +1000
+
+    Free duplicated option list after conversion to InputOption
+    
+    The duplicated list is a copy (as the comment in the server says) and thus
+    must be freed.
+    
+    ==27895== 947 (40 direct, 907 indirect) bytes in 1 blocks are definitely lost in loss record 266 of 311
+    ==27895==    at 0x4A06B6F: calloc (vg_replace_malloc.c:593)
+    ==27895==    by 0x4E538C: addNewOption2 (Flags.c:203)
+    ==27895==    by 0x4E5401: xf86addNewOption (Flags.c:216)
+    ==27895==    by 0x4AEB24: xf86AddNewOption (xf86Option.c:347)
+    ==27895==    by 0x4AE54B: xf86OptionListDuplicate (xf86Option.c:152)
+    ==27895==    by 0xB74D139: wcmOptionDupConvert (wcmValidateDevice.c:382)
+    ==27895==    by 0xB74D408: wcmQueueHotplug (wcmValidateDevice.c:515)
+    ==27895==    by 0xB74D645: wcmHotplugOthers (wcmValidateDevice.c:568)
+    ==27895==    by 0xB742DA2: wcmPreInit (wcmConfig.c:599)
+    ==27895==    by 0x4C1ACF: xf86NewInputDevice (xf86Xinput.c:846)
+    ==27895==    by 0x4C2014: NewInputDeviceRequest (xf86Xinput.c:989)
+    ==27895==    by 0x4DD72C: device_added (udev.c:231)
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit bc095d579bc6b1380080c83c4e5f6df173364b76
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu May 9 10:39:39 2013 +1000
+
+    Plug memory leaks left by xf86SetStrOption
+    
+    xf86SetStrOption() returns a strdup'd string that needs to be freed after
+    use.
+    
+    This requires some const char* → char* changes too, for things that were
+    never really const char* to begin with anyway.
+    
+    wcmEventAutoDevProbe() can use xf86CheckStrOption so it too returns a
+    strup that we can free lateron.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 6940e481a4aadfbc4c87362e1461a43b296bc8b1
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Apr 30 14:40:07 2013 +1000
+
+    Purge TILT_REQUEST_FLAG
+    
+    Write-only value, obsolete as of xf86-input-wacom-0.10.4-45-gba90433
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 1329374edbd8bd5a375d32829d0f6153f84e6b6f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu May 2 09:34:56 2013 +1000
+
+    man: clarify how to configure keys on higher shift levels in xsetwacom
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit d0dbb34e524ebb58bb9a5a623d2fa96a1470516f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Apr 29 14:47:06 2013 +1000
+
+    xsetwacom: map a bunch of special symbols
+    
+    Punctuation marks and others map to XK_* keysyms but only in their named
+    form, not in their single-character symbol form.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit e50725269dd76c4a3c92c84dd4413034a8937df0
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Apr 29 14:46:18 2013 +1000
+
+    xsetwacom: if we fail to map a string, try as special key or warn
+    
+    If a string comes back with a KeySym of 0, try again as a special key. And
+    if that fails too, print a warning.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 915a64589f34a0593fe55afa82de30c4415c3020
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Apr 29 14:14:43 2013 +1000
+
+    xsetwacom: add special mappings for Home, End, Delete
+    
+    These three are likely written as home, end, del, so let's try to
+    understand that.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit c1f31c0ab16bc11614d6cfbd9bc16e4714732279
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Apr 29 13:20:58 2013 -0700
+
+    wacom 0.21.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 5c6bd8d45ca2358d42fdd028112e724c691774ba
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Apr 19 18:14:59 2013 -0700
+
+    wacom 0.20.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8d804cdf31bfbf9ec46ee15ab1a58e63f770c2b8
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 18 14:51:37 2013 -0700
+
+    Fix const warnings in wcmSetActionProperty
+    
+      CC       wcmXCommand.lo
+    ../../src/wcmXCommand.c: In function 'wcmSetActionProperty':
+    ../../src/wcmXCommand.c:460:23: warning: assignment discards 'const' qualifier from pointer target type [enabled by default]
+        case BadMatch: msg = "BadMatch"; break;
+                           ^
+    ../../src/wcmXCommand.c:461:23: warning: assignment discards 'const' qualifier from pointer target type [enabled by default]
+        case BadValue: msg = "BadValue"; break;
+                           ^
+    ../../src/wcmXCommand.c:462:17: warning: assignment discards 'const' qualifier from pointer target type [enabled by default]
+        default: msg = "UNKNOWN"; break;
+                     ^
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 135e6f60df1398f2c5145535f68e06703ccd77b4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 18 14:47:17 2013 -0700
+
+    Remove unused variable
+    
+    src/wcmUSB.c:451:14: warning: unused variable 'private' [-Wunused-variable]
+      wcmUSBData* private = common->private;
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit dfe4d23ef30db20e726605599c1c6bed2aa20a3a
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 26 11:39:55 2013 +1000
+
+    Correct comment for Sample and Suppress property
+    
+    The data in the property is actually the other way round. Oops.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit ad952fe2800c875b2f0b4663358d454d793ce57f
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Fri Mar 8 17:04:42 2013 -0800
+
+    add support for 0x10d
+    
+    It is a Wacom device found in Fujitsu Lifebook T902.
+    
+    Signed-off-by: Stephan Frank <sfrank@cs.tu-berlin.de>
+    Acked-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 7a1aadb24b6573809d7324f2549bed749ad1a7f2
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Mar 7 14:11:30 2013 -0800
+
+    Resume button events for pucks
+    
+    wcmBTNChannel was statically assigned to PAD_CHANNEL by commit 1f9bf45b, which
+    excluded button events for CURSOR tools. This patch allows usbParseBTNEvent
+    to process button events for both CURSOR and PAD tools.
+    
+    wcmBTNChannel is removed from wcmUSBData since we do not need it anymore.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit c3b4e869924291ee1ec72a2f02fc1986873efe92
+Author: Jan Alexander Steffens (heftig) <jan.steffens@gmail.com>
+Date:   Mon Mar 4 18:33:03 2013 +0100
+
+    Make touchscreens (WCM_LCD) direct touch devices
+    
+    Tested with a tablet pc, allowing finger scrolling in GTK3.
+    
+    Signed-off-by: Jan Alexander Steffens (heftig) <jan.steffens@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Tested-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 9077b12cd6ef7a9772aaea00b52baad64471e4e4
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Mar 5 16:46:27 2013 -0800
+
+    Consolidate calls to wcmEvent into one statement
+    
+    The extra wcmEvent call was to deal with generic PAD events received
+    without motion events in the same packet. Those PAD events would be
+    filtered out by the device type retrieving code later.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Acked-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit db17462c0e85f880647f23a0e8bbfd4d20a38303
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Mar 5 16:45:45 2013 -0800
+
+    Clean up device_type initialization for tool on tablet
+    
+    usbInitToolType retrieves device type from the kernel when tool
+    is on the tablet at X server startup. No need to do it again later.
+    
+    Since kernel does not have a specific device type for PAD, we have
+    to check the actual events to set its type.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Acked-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 6f9826217f50df8e315d3a7d694a4daf62f32c38
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Mar 5 16:44:52 2013 -0800
+
+    Update MAX_CHANNELS definition
+    
+    Make room to report pen and touch events simultaneously
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 1bca5eefa22afcce1ebe33812e7d17872ceeafca
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 5 09:41:47 2013 +1000
+
+    Handle DEVICE_ABORT on input ABI 19.1
+    
+    And do nothing.
+    
+    USB devices are handled by the kernel, so we don't need to reset the HW.
+    ISDV4 devices don't get reset on normal shutdown anyway, so we don't need to
+    do anything here either.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit ab53739dafee0e0f4a534220501bd067193ff109
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Mar 4 09:46:17 2013 -0800
+
+    wacom 0.20.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 256567c6ad9ec120098d9dbf35e9dc609114bc9d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Feb 26 10:40:53 2013 -0800
+
+    wacom 0.19.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit be0b40d2453ba03d99a6dab460ad4007c4d97161
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Feb 26 09:39:20 2013 -0800
+
+    Fix warning: format expects argument of type
+    
+    ../src/wcmXCommand.c: In function 'wcmCheckActionProperty':
+    ../src/wcmXCommand.c:387:3: warning: format '%d' expects argument of type 'int', but argument 4 has type 'long int' [-Wformat]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit dc5608a2911cf0698db1dd083250e37b4a31d58f
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Fri Feb 22 11:14:21 2013 -0800
+
+    Support pen/touch arbitration across product ids
+    
+    Devices with different product ids for pen and touch, such as
+    Cintiq 24HD and DTH 2242, were added recently. Applying arbitration
+    only for tools with same product id is not enough.
+    
+    However, we want to make sure tools with same product id are lined
+    properly first. That's why the same routine is repeated instead of
+    combined.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 120f72f8f3fe5e74ed87c7ee3828243ba4ba054b
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Feb 21 19:01:25 2013 -0800
+
+    Arbitration applies to puck/Wacom mouse as well
+    
+    We do not allow finger competes with CURSOR.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 06afd180edad2b39dc717d266f5012ca93bd2d8f
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Feb 21 19:01:01 2013 -0800
+
+    Fix pen and touch arbitration
+    
+    Arbitration did not work as expected since common is meant for tools
+    on the same logical port, not for tools of the same physical device
+    or of the same product id. Plus, not all devices support touch.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 2ab2dd3d0d2bcd353730f11782aa64bb9dc58b2c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 17 17:42:24 2013 -0800
+
+    Don't reset properties on checkonly
+    
+    We shouldn't make *any* change to the state if checkonly==true, but
+    we've been resetting properties anyway. This blocks off the calls
+    to the reset functions to prevent them from being called if it's
+    just a drill.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5b9c2d84dfc206ee245ba22b92a6d1d824cff3f0
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Mon Jan 28 15:59:30 2013 -0800
+
+    Add Touch option to xsetwacom manpage
+    
+    We did not explicitly add this option when worked on the manpage
+    since we thought Gnome control center (g-c-c) or something else
+    in userland would take care of touch (as well as its gestures).
+    However, I see no sign of getting touch in g-c-c soon. Let's take
+    care of touch uers here for now.
+    
+    Wacom manpage is also updated accordingly.
+    
+    Reported-by: Nikolai Neff <gefrierbrand@users.sf.net>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 9a664ab7b99ca68e29f73196c216b3a6918325d5
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jan 23 11:59:37 2013 -0800
+
+    include: Move wacom-util.h after X11 headers
+    
+    Combined with the "#ifndef" in commit c95c1f2c, this fixes the compiler
+    warnings generated about ARRAY_SIZE being redefined.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 352f33964f606370cf2ad6f4edf0800f18c8ed15
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jan 23 11:13:07 2013 -0800
+
+    Have wcmFindActionHandler return success/failure directly
+    
+    We can guarantee that the out arguments are non-NULL if the property
+    was found, so return a boolean instead of relying on the caller to
+    check for non-NULL results.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 59925bd45b714376b7f2ba07d0e443ed8db24861
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 17 17:04:38 2013 -0800
+
+    NONE is not a valid action, and NULL a bad value
+    
+    While the NONE Atom indicates that the driver should reset the
+    action at the index it resides it, it is not *itself* a valid
+    action. This patch prevents us from attempting to set NONE as
+    an action.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5d5be5106183961da2b1e793c4a62e59c1274e01
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Dec 18 12:59:04 2012 -0800
+
+    Have wcmSetActionProperty run checkonly
+    
+    Instead of checking only the 'actions' property, also check the
+    individual 'action' properties as well. We obviously won't be able
+    to correctly apply the former if the latter fails midway through.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 3f5bc05608d59d08f0ce600afcc9a56acd294ab2
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Dec 17 17:24:43 2012 -0800
+
+    Pass errors from wcmSetActionProperty up the stack
+    
+    Errors when setting an action property should not be swallowed. Note
+    that because the containing function does not bother to call this
+    function 'checkonly', clients still can't find out about errors
+    until its too late. We'll fix this in the next commit.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit ed561f701e4b2ba60fb5d8abf881e816118880a8
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jan 22 14:09:29 2013 +1000
+
+    Setting an invalid action property should return an error
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 33cccd3fa4e5185857b2248b56509a97ed19df84
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Dec 17 16:56:06 2012 -0800
+
+    Have wcmFindActionHandler properly handle wcmFindProp error
+    
+    If wcmFindProp cannot find the given property, it will return a
+    negative error code. At the moment, this is taken as the success
+    condition(!?) for the strip_actions case... Aside from being
+    wrong, this has the potential to cause some nasty memory corruption.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2d38dac523145e3157a3b5fc200f13254f56219c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Dec 17 16:55:30 2012 -0800
+
+    Improve wcmFindProp readability
+    
+    The existing code is needlessly hard to follow. It should return
+    immediately upon success, and unconditionally bail if it never
+    succeeded.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 7e418191a29f681331dd0134c8887d641d737410
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 17 16:51:22 2013 -0800
+
+    Increase maximum allowed X11 button number
+    
+    Actions specify X11 button numbers that should be generated when
+    performed. The maximum button number that could be used in an event
+    has been raised from the driver-imposed limit (WCM_MAX_BUTTON) to
+    the server-imposed limit (WCM_MAX_X11BUTTON).
+    
+    This feature is necessary for gnome-settings-daemon to work properly.
+    To reliably identify each touch strip and ring, g-s-d assigns each
+    a high button numbers to send for each direction. Without this
+    patch, the driver ignores the actions set by g-s-d and continues
+    to send whatever the default action is instead.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 082f37feee3170521df4a1a1bbd91e0274282bf1
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Dec 18 12:58:45 2012 -0800
+
+    Improve logging of X property setting
+    
+    Sprinkles a few extra DBG() calls into the code to make it a little
+    easier to track down issues with property-setting code.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit b6bd20a660f6c682f9de3372b3f1a636a34d9b65
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Jan 18 08:43:52 2013 +1000
+
+    test: replace INCLUDES with AM_CPPFLAGS
+    
+    see https://lists.gnu.org/archive/html/automake/2012-12/msg00038.html
+    
+    - Support for the long-deprecated INCLUDES variable will be
+      removed altogether in Automake 1.14.  The AM_CPPFLAGS variable should be
+      used instead.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 4cffb337d7dc43d17e11a28f70a8be11f21d74ff
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Jan 10 11:30:15 2013 +1000
+
+    Fix a debug message not parsed by sigsafe printf code
+    
+    The server doesn't interpret %g, use %f instead. tbh, right now it doesn't
+    interpret %f either, but there's patches on the way for that.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+
+commit b7a2d8e7eb57fb11ec7753d555ab479475fe5230
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Jan 10 11:25:07 2013 +1000
+
+    Drop unused maxWidth/maxHeight
+    
+    These two are never set to anything but 0 since
+    xf86-input-wacom-0.10.10-19-g6f5f29b
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit a7de9daa67afbf0c721e681809be2fbe519d26c8
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Dec 19 12:37:03 2012 +1000
+
+    Fix indentation in usbStart()
+    
+    No functional changes.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit c95c1f2c2d449f78eae109b927db85db05ab9a6f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Aug 20 13:21:37 2012 +1000
+
+    include: don't redefine ARRAY_SIZE
+    
+    The server provides this macro in its headers, so only redefine it where
+    needed (for the tools)
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit bc2de318b5ad131fb60d3c5a057c185f764969a1
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jan 2 11:15:53 2013 -0800
+
+    wacom 0.19.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit c29dbba29eb6e8ab1494339c29483b0e1068d894
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Dec 20 17:21:29 2012 -0800
+
+    Properly map 2nd abswheel of Cintiq 24HD touch
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 654fdcb188e272f4122ea128612e899b397b0709
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Dec 19 11:15:21 2012 -0800
+
+    wacom 0.18.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit d4aad5dd0c0d010701e2d3f46d9cd98daf6883e4
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Dec 19 13:43:09 2012 +1000
+
+    If ds.device_type is 0, set it to the one we guessed earlier
+    
+    priv->wcmDeviceType contains the guessed device type, after querying the key
+    state from the kernel. If that found our device type, use it.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Tested-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 7e86e9871459c980a95bcea98dd0a2890b0b584a
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Dec 19 13:43:08 2012 +1000
+
+    Fix missing braces around condition in refreshDeviceType
+    
+    Causing this function to always return 0
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+    Tested-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 5209f14707c7d1446c0987adba74cb46028dbf3c
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Dec 19 13:43:07 2012 +1000
+
+    Handle BTN_TOOL_MOUSE/LENS in toolTypeToDeviceType
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+    Tested-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 37734d52cc1ce84ba5153bb45587892b5070c9c5
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Dec 18 14:48:20 2012 -0800
+
+    Filter out DOUBLETAP and TRIPLETAP events for true MT data
+    
+    DOUBLETAP and TRIPLETAP are duplicated events in type-B MT format.
+    We do not use them in this driver. Plus, they could be confused
+    by fake MT events on older kernels.
+    
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 1f9bf45bdf2eb58491fa578aa6b9ce55a9c13366
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Dec 18 14:47:53 2012 -0800
+
+    Assign PAD_CHANNEL to BTNChannel for all PAD tools
+    
+    BTNChannel is static for all devices, not just geneic devices.
+    
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 62e5222c14cb4d282a3a285e7dd84f0ea1d00e36
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Dec 13 12:19:23 2012 -0800
+
+    BTN_TOOL_FINGER is not for PAD if MT is supported
+    
+    BTN_TOOL_FINGER indicates single touch/first finger if MT is enabled
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit b5bcd03d12773e3147b4eb5d6a2a39b4c06bb9f4
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Dec 13 12:18:37 2012 -0800
+
+    Send generic PAD events before other events
+    
+    If we wait until we finish other verifications, we could miss
+    PAD events since they will be filtered out when there are no
+    motion events sent simultaneously.
+    
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 6bd777a7d15c071dc2079fb8bcb4a7f13685aeba
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Dec 13 12:18:02 2012 -0800
+
+    Initialize wcmBTNChannel in usbWcmInitPadState()
+    
+    wcmBTNChannel is only used by generic PAD device.
+    And it is statically assigned to PAD_CHANNEL. No
+    need to reassign it for every packet.
+    
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit f310e20f6a3dc519f7d318ee53c1024f28892991
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Dec 13 12:16:52 2012 -0800
+
+    Remove channel duplication code for generic devices
+    
+    We use true MT protocol for MT devices in kernel now. This code
+    was introduced to deal with ABS_TOOL_*TAP events loss issue. It
+    is uncessary any more. And its existence makes it hard to support
+    generic PAD cleanly.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 5d0f8c1abea4b1a791d169ffb15a0b2aee50a7d3
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Dec 10 15:35:38 2012 +1000
+
+    man: CursorProx affects absolute mode as well
+    
+    Update man-page for driver behavior.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit f3ede09dd504e2ca054bbac7413bd9a3416ec31f
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Dec 4 14:51:32 2012 -0800
+
+    Convert resolution from points/inch to points/m
+    
+    Somehow we forgot Lenovo W700 last round.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2b285d01e1c03b51a8526516acda208edbeeac89
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Dec 4 14:51:05 2012 -0800
+
+    Update resoltuion for old kernels
+    
+    We upscaled resolutions in WacomModelDesc and reported from
+    absinfos. But we forgot to update them for older kernels
+    that do not support resolution in absinfo.
+    
+    Resolution received from kernel is in hundredths of a mm.
+    The scale we use here is in meter.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit a82f0251e400b98b0044f2c8ab89c4b61ec99d4f
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Dec 4 14:50:42 2012 -0800
+
+    Post maximum number of contacts to clients
+    
+    Clients should know the maximum number of contacts a touch device
+    support before they get touch events.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 26a6a42fd0a726518f62b8da6926b111a01b33cf
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Nov 14 09:54:34 2012 -0800
+
+    Properly clear action properties
+    
+    What we want to do is clear all 256 steps of an individual action. What
+    we were doing was clearing just the first step.
+    
+    As mentioned on the ArchWiki, this cuases the following behavior:
+      $ xsetwacom --set <id> Button 1 "key a b c" # press button 1 -> abc
+      $ xsetwacom --set <id> Button 1 "key d"     # press button 1 -> dbc  WRONG!
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5899942e84d4ae7498ea0cc764aa05b609738d7f
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Wed Nov 21 12:14:10 2012 -0800
+
+    Add support for MT ISDv4 device 0x4001
+    
+    It supports up to 10 fingers
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 38018e941ff197d00867feff4fe7fb501f584826
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Wed Nov 21 12:13:44 2012 -0800
+
+    Support up to 16 touch points
+    
+    Bamboo3 and Intuos5 both support 16 fingers
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 4ba50c66d65d11232e169d3202ea4a34e06362de
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Nov 21 16:12:48 2012 +1000
+
+    Bring back AM_MAINTAINER_MODE, default to enabled
+    
+    See Ron's comments discussion on:
+    http://old.nabble.com/-PATCH-libwacom--Drop-AM_MAINTAINER_MODE-td34561358.html
+    
+    Summary:
+    In this workflow all generated files are committed to git to have a known
+    working set. On checkout, git does not restore the original timestamps,
+    so with maintainer-mode enabled, automake will regenerate the files - which
+    is to be avoided since we already have the known working set.
+    
+    AM_MAINTAINER_MODE([enable]) gives us the same behaviour as now, but will
+    allow Ron to disable the regeneration of the files.
+    
+    Requested-by: Ron <ron@debian.org>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 0c417e33d5b45ce9206448fb45de9338c25c1f5d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Nov 5 09:10:27 2012 -0800
+
+    Don't declare touch_mask on older servers
+    
+    Missed necessary preprocessor guard in 0d164e66.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 3474d206359cf54e991d5dfeff04ed00efa3ce4e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Oct 26 16:01:47 2012 -0700
+
+    wacom 0.18.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit b3e52e3f921a8f28962ec6e369db1235f046168c
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Thu Oct 25 17:47:24 2012 -0700
+
+    Add three MT ISDv4 devices (E5, 100, 101)
+    
+    Signed-off-by: <pinglinux@gmail.com>
+
+commit 97358d0effeb4b72af095cb67d12881286f6fb04
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Oct 23 10:20:17 2012 -0700
+
+    Have direct-touch devices move into and out of GESTURE_DRAG_MODE
+    
+    Direct-touch devices (e.g. tablet PC, 24HD touch) are currently left in
+    GESTURE_NONE_MODE while performing drags. This can lead to potential
+    "stuck button" issues, since as soon as a second finger comes in
+    contact, the driver will switch to GESTURE_LAG_MODE. This prevents the
+    wcmSingleFingerPress function from being called, leaving button 1 in a
+    pressed state. While any subsuquent gesture will release button 1, if
+    the pen is brought into proximity before one occurs, the fingers will be
+    sent out of proximity without a chance to release button 1. This causes
+    the button to remain "stuck" in the pressed state until the next touch
+    occurs.
+    
+    There are a few different ways this issue could be addressed. In the
+    interest of symmetry with indirect-touch devices, this patch has
+    direct-touch devices enter and exit GESTURE_DRAG_MODE as well. This
+    delays the mode swith to GESTURE_LAG_MODE by one event, allowing
+    wcmSingleFingerPress to be called to release button 1.
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=56308
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 74396082c690800a04d20dab2c41e873836774aa
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Oct 24 17:13:25 2012 +1000
+
+    If _source is NULL, don't auto-pick the type.
+    
+    An xorg.conf InputDevice section that does not have Option Type set is
+    invalid. Skip the type assignment and return, triggering an error about an
+    invalid type lateron.
+    
+    Fixes crash triggered as of xf86-input-wacom-0.17.0-8-g0debde6 by having an
+    InputDevice section like this:
+    
+    Section "InputDevice"
+        Identifier "--device--"
+        Driver "wacom"
+        Option "CorePointer" "on"
+    EndSection
+    
+    This would lead to the device being assigned a type and assumed to be for
+    hotplugging. Later, when the device attributes are duplicated during
+    QueueHotplug, asprintf() tries to duplicate attr->product, which is always
+    NULL for xorg.conf devices.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 9f896f4800593c7fa232e40fd934b7f51d0dde6d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Oct 19 17:15:58 2012 -0700
+
+    wacom 0.17.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8b412136a4bd032534bd0eb970a4a06c942fcf59
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Oct 19 17:13:13 2012 -0700
+
+    Limit use of touch class to touch devices only
+    
+    Applying the touch class to all devices shouldn't really affect
+    anything, but just to be sure we surround it in a IsTouch() check.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 637651338015563c6847028870aaa08b293f1ef1
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Oct 18 13:06:36 2012 -0700
+
+    Correct number of actions reported by sendWheelStripEvent to sendAction
+    
+    Commit 477a261e has sendWheelStripEvent use the ARRAY_SIZE macro on a
+    pointer. This will not return a proper value, causing the wrong array
+    length to be provided to sendAction. This can lead to only the first few
+    actions assigned to a wheel or strip actually being performed.
+    
+    This patch changes the signature of sendWheelStripEvent to accept an
+    explicit length.
+    
+    https://sourceforge.net/tracker/?func=detail&aid=3577713&group_id=69596&atid=52$
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e81c1400b023be49afc3f62066d21281a1c2bb95
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Oct 18 12:52:15 2012 -0700
+
+    Have getWheelButton deal with array indices instead of pointers
+    
+    This patch modifies the function signature of getWheelButton so that it
+    accepts and returns array indices rather than pointers. This is in
+    preparation of the next commit, which would be needlessly unreadable
+    otherwise.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit cc855c1c4f1815c691fbef2293d04b78f28ffc42
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Oct 17 18:02:56 2012 -0700
+
+    Restore pad button functionality
+    
+    Commit b0083492 broke pad buttons by no longer setting the wcmBTNChannel.
+    With this variable left uninitialized, pad button data would be stored
+    in another channel (e.g. 0) without any other data like proximity set.
+    
+    This commit sets wcmBTNChannel to point to the channel used for
+    storing pad data whenever a pad packet is detected.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 7c91665c86c93b9668a1649d20b32550fbdc544b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 2 09:23:55 2012 -0700
+
+    Add support for Cintiq 24HD touch
+    
+    Adds support for the EMR and touch digitizers on the Cintiq 24HD
+    touch. The digitizers are on separate USB devices, which can lead to
+    the cursor jumping back and forth between the stylus and finger.
+    Performing arbitration between the two (disabling finger while pen is in
+    proximity) is expected to be handled by the kernel driver.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 8c17d224a5df855ccdb1bb15862156782532074c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Oct 8 11:03:18 2012 -0700
+
+    Add recently-referenced functions to fake-symbols
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit c85ecf117d4937b6943b5a1215711c99389e5c46
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Oct 17 08:25:19 2012 +1000
+
+    Drop AM_MAINTAINER_MODE
+    
+    We want xf86-input-wacom to react to changes in Makefile.am's
+    
+    Long writeup:
+    http://blogs.gnome.org/desrt/2011/09/08/am_maintainer_mode-is-not-cool/
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 72508ebe5533501758aad073f120b50f04ac0060
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Oct 2 14:29:24 2012 -0700
+
+    Fix prerequisite check in wcmUpdateSerial
+    
+    The prerequisite check in wcmUpdateSerial is incorrect. If the tool ID
+    changes, the property reflecting it will not be updated unless/until the
+    serial number also changes. The check is updated to reflect this.
+    
+    Additionally, the prerequesite check at one of its callsites is removed
+    since the function performs the same check internally.
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=45237
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 3e9be03fe19db693f600844b24ce66cefcf6267a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Sep 21 19:57:00 2012 -0700
+
+    Move check for enabled gestures to the functions that execute them
+    
+    At the moment, disabling gestures disables *all* gestures. That includes
+    the core "tap to click" gesture (and slightly-less-core "tap and hold to
+    drag"). This patch allows these two gestures to not be considered such
+    by moving wcmGesture check into the functions that execute the gesture.
+    All two-finger functions (right click, scroll, and zoom) are disabled by
+    wcmGesture, but all single-finger functions remain operational.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Chris Bagwell <chris@cnpbagwell.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 0d164e66cbb7119d68d2008242f0ec2cca2202a7
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 26 10:57:27 2012 -0700
+
+    Use new multitouch protocol in XI2 if possible
+    
+    Adds a new MULTITOUCH gesture mode that will redirect all in-contact
+    touches through the new multitouch code available in XI2.2 (ABI >= 16).
+    
+    MULTITOUCH mode will only be entered when in-driver gestures have been
+    disabled and at least two fingers are present. The driver will remain
+    in this mode until *all* fingers have left the tablet.
+    
+    For the moment, all touches are sent as XIDependentTouch. Direct touch
+    devices such as tablet PCs and Cintiqs are not an exception. This may
+    be changed in the future once frameworks are better equipped to handle
+    direct input touches.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit a6f1e4b10524cba3272147537cef036e860cac4c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Sep 18 16:06:55 2012 -0700
+
+    Dynamically choose channel for ABS_MT data
+    
+    Now that the touch code doesn't look in statically-defined
+    channels and usbChooseChannel is capable of locating channel
+    numbers for arbitrary tool type/serial combinations, we can
+    use the latter to track an aribrary number of touches without
+    fear of stepping on the toes of another channel.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit f85f025b4ad08295222a1264b4d2cfb20ccdb918
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Sep 21 13:56:21 2012 -0700
+
+    Have usbChooseChannel take explicit device type and serial args
+    
+    Instead of divining this information from the stored private data,
+    take them as arguments. This gives us more flexibility in finding
+    channels for sub-tools (e.g. individual fingers).
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit b00834928e81ca2ddaaf00c78a2ea1a4ac50b19c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 25 17:32:43 2012 -0700
+
+    Simplify usbChooseChannel logic
+    
+    Instead of having different per-protocol cases, just obtain serial
+    numbers equivelent to those you'd get from Protocol 5 and then
+    use that serial to find a channel dynamically.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit afb25836e6350b5aaea76ccc68b2e16d382e1398
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Aug 1 17:10:27 2012 -0700
+
+    Make usbInitToolType more generic, and always use
+    
+    Tweaks the usbInitToolType function to be always useful. This is
+    needed so that we can use it to get the tool type for all event
+    frames, allowing us to properly fill in the tool type for devices
+    that we otherwise don't figure out until later on (which causes
+    problems with the proper operation of usbChooseChannel).
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 63cf3c5a2a04559838ec6fd6b9e7e808818072b1
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Sep 21 19:07:57 2012 -0700
+
+    Dynamically find touch channels, instead of hard-coding
+    
+    Right now the driver assumes that the first touch will always
+    be in channel 0, and the second touch (if present) is in
+    channel 1. This patch adds a new function to scan the channel
+    list for appropriate contacts, and uses it instead of the
+    hard-coded index accesses.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 709e0aa23f34003d4526cbf9435a295ee83e0ee0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Sep 21 19:13:45 2012 -0700
+
+    Use serial number instead of channel number to identify contacts
+    
+    Code that deals with touch points shouldn't care which channel an
+    event is occuring in; it should be more concerned with the finger
+    that caused it. At the moment these are the same things (first
+    finger is always in channel zero), but this will soon change.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 67822ebb90a89f5d95ed45a316d905a10c87fc53
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Sep 18 16:24:22 2012 -0700
+
+    Add and use a 'dirty' bit for WacomChannel
+    
+    Instead of keeping around 'channel_changed', 'mt_channel_changed',
+    and 'btn_channel_changed', just add a flag to the WacomChannel
+    itself that can be set whenever something changes.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 0debde6b14a1765e1dd5a483faafe6b90e0e62ba
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 24 16:30:05 2012 -0700
+
+    Properly handle nulls in wcmIsHotpluggedDevice
+    
+    Commit def7b5fd changed how wcmIsHotpluggedDevice handles null values,
+    with the result that a device with no "_source" specified would be
+    interpreted as having been hotplugged. This restores the original
+    behavior.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 1b4da8527d2719cc9ab1f5ed1390ffac44772230
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 24 16:12:29 2012 -0700
+
+    Properly handle nulls in wcmCheckSource
+    
+    Commit cff344b1 modified the null-handling of wcmCheckSource, such
+    that the wrong result will be returned if either/both  fsource and
+    psource are null. This patch restores the original behavior.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 0a27c707eafe57a85266452a395f89c8237efdbf
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 24 17:53:49 2012 -0700
+
+    Fix double-free in wcmPreInitParseOptions
+    
+    The 'tool' function here is set equal to 'priv->tool' earlier in
+    this function. If an error condition occurs, the tool can be freed
+    both here and in wcmFree (via wcmUninit).
+    
+    It should be safe to postpone this free() until wcmFree to be
+    freed along with the rest of the memory allocated in wcmAllocate.
+    There should be no leak (wcmUninit will be called on failure) and
+    any code relying on priv->tool being a valid pointer after the
+    failure of wcmPreInitParseOptions is already broken.
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=55200
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 59941213fb8972abc1cd3bf3762444ab73ae1329
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jun 27 10:28:53 2012 -0700
+
+    Device grab should be optional
+    
+    Like in recent versions of xf86-input-evdev, grabbing the input device
+    with EVIOCGRAB should be optional. This would enable for example
+    indicator applets, and would improve dynamic handling of different input
+    devices.
+    
+    Proposed patch extended to document new GrabDevice driver option.
+    
+    https://sourceforge.net/tracker/?func=detail&aid=3509828&group_id=69596&atid=525124
+    
+    Reported-by: henris42
+
+commit 0fe7f800295a4b5bf074bca798cf8024fcb174ec
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Sep 13 16:59:01 2012 -0700
+
+    Ignore out-of-prox events from unknown devices already out-of-prox
+    
+    Fixes an issue with the Intuos5, which sends extra out-of-prox
+    notifications when the ExpressKeys are touched. This causes the driver
+    to ask the kernel for the tool currently in prox and post an empty event
+    for it. The result is a cursor that (only while the pen is in prox)
+    sometimes jumps to the top left when touching the buttons.
+    
+    We fix this by ignoring events that claim to be leaving prox when the
+    tool is already supposedly out of prox.
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=54250
+    
+    Reported-by: Timo Aaltonen <tjaalton@ubuntu.com>
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e604e4e6c69898920e27aeed5a772484d796562b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Sep 7 12:24:23 2012 -0700
+
+    Have keysym_to_keycode handle unused keycodes
+    
+    The current implementation of keysym_to_keycode does not
+    properly handle unused keycodes. The functions XkbKeySymsPtr
+    and XkbKeyGroupWidth mislead it into believing it is reading
+    a keysym associated with the unused keycode when in reality
+    it is reading a keysym associated with the *next used*
+    keycode.
+    
+    This impacts different keys depending on the keyboard layout
+    in use. On mine for instance, the left Super key is unusable
+    because its keycode is preceeded by an unused keycode.
+    
+    To resolve this issue, we take a page from XKeysymToKeycode
+    and use the function XKeycodeToKeysym instead of manually
+    accessing the keysyms.
+    
+    https://sourceforge.net/tracker/?func=detail&aid=3555424&group_id=69596&atid=525124
+    
+    Reported-by: alexmaret
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit cea5cc1f25c3a1d9f1feec88b0c4d8af59b47a74
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Sep 6 09:41:26 2012 -0700
+
+    Add LogMessageVerbSigSafe to fake-symbols
+    
+    Somehow overlooked this while adding 'xf86MsgVerb' to fake-symbols.
+    Oops.
+    
+    Reported-by: Timo Aaltonen <tjaalton@ubuntu.com>
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 2f2acecb97e1ac941e85ddbb704e3ce7f37d0261
+Author: Nikolai Kondrashov <spbnick@gmail.com>
+Date:   Tue Aug 28 23:17:28 2012 +0300
+
+    Use kernel-reported tilt range and resolution
+    
+    Use tilt range and, optionally, resolution reported by the kernel for event
+    devices.
+    
+    Add a constant for resolution currently expected by applications: TILT_RES,
+    1 point per degree in kernel units (points/radian). Scale values to this
+    resolution for compatibility and specify it for corresponding valuators
+    (instead of 1) for future use by applications.
+    
+    Add constants for currently reported value limits: TILT_MIN and TILT_MAX,
+    -64 and 63 respectively. Continue clamping values to [TILT_MIN, TILT_MAX]
+    for compatibility.
+    
+    Values and ranges reported by currently supported tablets should remain
+    unchanged.
+    
+    Signed-off-by: Nikolai Kondrashov <spbnick@gmail.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit c246b7e4f756856d0d32501f86c7d655efe97106
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 5 09:22:26 2012 -0700
+
+    wacom 0.17.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e918c957f1c77fda3dec3fb9cb38ded6ffed9ca4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 27 09:42:37 2012 -0700
+
+    wacom 0.16.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 03583c5a54292cd484d41656e141e3c65ed961da
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 27 10:28:54 2012 -0700
+
+    Add xf86MsgVerb to fake-symbols to let 'make distcheck' complete
+    
+    The switch from 'xf86Msg' to 'xf86MsgVerb' introduced in commit
+    e4c1af41 requires that we define the latter in our fake-symbols
+    so that the test suite can compile correctly.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 625a43c040fd71393be94fdfad6cf7faa49db775
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Aug 22 15:05:48 2012 -0700
+
+    Make test_get_wheel_button happy
+    
+    Apparently there is some subtle difference here between returning
+    a pointer and using a double-pointer as an output parameter.
+    Tracing through the function shows the former *should* be working,
+    but for an unknown reason fails "assert(action == &action_dn)"...
+    
+    This patch shouldn't change any functionality -- it just shuts up
+    `make distcheck`.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit d8613ffc961be4c957ed30d4ac03e83411f835b6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Aug 22 11:30:14 2012 -0700
+
+    Update test to match new function signature
+    
+    The getWheelButton function's signature was changed in commit 40ecdcb5
+    but the tests were not updated to reflect this.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit ac17300d842f2842eff3a2b2aa3dbac7ebf88a2b
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Aug 23 09:03:34 2012 +1000
 
@@ -29,9 +1674,8 @@ Date:   Thu Aug 23 09:03:34 2012 +1000
     
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
     Acked-by: Chris Bagwell <chris@cnpbagwell.com>
-    (cherry picked from commit ac17300d842f2842eff3a2b2aa3dbac7ebf88a2b)
 
-commit e4c1af418fbfa615e7a34fdcf34a4a5083b41925
+commit b5a6983c62d233cfc7174f8f48e3abf3064c04ce
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon Aug 20 12:14:28 2012 +1000
 
@@ -42,9 +1686,8 @@ Date:   Mon Aug 20 12:14:28 2012 +1000
     
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
     Acked-by: Ping Cheng <pinglinux@gmail.com>
-    (cherry picked from commit f4cf73dccf0bf9913c7fdd4e346f4dddefe493f0)
 
-commit 8d5b61c37dbe30b80118c1f00df0a08de5c87b1c
+commit 90cdf85ca3a3d08f79bf6928cd11edaf08b81786
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Tue May 29 16:51:00 2012 +1000
 
@@ -52,9 +1695,157 @@ Date:   Tue May 29 16:51:00 2012 +1000
     
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
     Acked-by: Ping Cheng <pinglinux@gmail.com>
-    (cherry picked from commit 7ac6e9b7f5441ff9fbe4902940209e9e2c2f1310)
 
-commit 463d56aa4b82f9eda2be739478f111d52c5303b1
+commit 58d2a675b616af9e575f0bc0dcec7950a5498c9d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Jul 10 09:29:01 2012 -0700
+
+    Set WCM_LCD on the Cintiq 24HD
+    
+    This flag was apparently forgotten when the 24HD was originally
+    added.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8dcf5ee466cfb14490fa52c8af8a4cbac92036f7
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jul 25 17:39:49 2012 -0700
+
+    Add missing newline to error message
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit b620267a709cb399338641fcc4c671aad2c7986c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jul 25 12:18:17 2012 -0700
+
+    Internally use physical button numbering for actions
+    
+    One should not have to keep in mind the historic quirk that
+    mouse buttons 4-7 have when dealing with buttons events generated
+    by the tablet. This patch isolates conversion between physical
+    and X11 numbering to the single place it has historically
+    mattered: the button property getters/setters.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 40ecdcb59952cea69a2b520c34e21922fbaa2c62
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Feb 27 10:38:52 2012 -0800
+
+    Remove raw button fallback codepaths from wcmCommon
+    
+    With actions now defined on initialization and reset to default
+    when given a 'None' action, we can remove the raw button codepaths
+    without a noticible change in driver behavior.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 089a397e5a32aa2e8e212a2c908c7ac782f2b398
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Apr 2 17:05:43 2012 -0700
+
+    Reset-on-None for Actions property
+    
+    This patch adds the ability to reset an individual Action by
+    setting the corresponding element of an Actions property to
+    the 'None' atom (i.e. 0). When encountered, the None will be
+    replaced with an atom representing the default Action. This
+    will let the driver behave as it currently does once raw
+    button support is removed.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8c1f585446f56303058840fc40c133c0bab9cc7c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Apr 3 10:10:59 2012 -0700
+
+    Initialize action properties from defaults
+    
+    This patch adds functions capable of resetting the action
+    properties (button/stip/wheel) to their default, and calls
+    them on initialization.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8c6711b14b105770e792e6de08cd1e05ddd07ba5
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Apr 3 10:09:32 2012 -0700
+
+    Cleanup call chain for action properties
+    
+    This patch rewrites the call chains used for setting the three
+    action properties by introducing a single function to handle
+    the 'Actions' properties, and a single function for 'Action'
+    properties. Functions which were merely helper functions have
+    been inlined if appropriate.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 29be2391f3f07b04103a2146bece728421aa41e3
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Feb 6 12:42:04 2012 -0800
+
+    Remove support for 8-bit (raw button) strip/ring properties
+    
+    This patch removes the ability to set up the touchstrips or
+    touchrings with raw 8-bit button numbers. Buttons have been
+    without this ability for quite some time, and this brings
+    these two properties in line.
+    
+    This patch will break applications which rely on the use
+    of raw buttons in the properties, but the actual fallout is
+    expected to be minimal. Applications which don't understand
+    Actions are already broken (since they can't work with buttons)
+    and those that do understand Actions but don't use them can
+    be easily modified.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 0512c1add914e090feaaa55586b32be84a0cdd8c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Feb 10 12:06:47 2012 -0800
+
+    Replace multiple default variables with arrays
+    
+    Storing the defaults for strips and wheels in individual
+    variables makes updating and scanning through them very
+    tedious. This patch replaces the variables with arrays
+    and introduces new #define statements to keep the level
+    of semantic meaning we had.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 0233668825401bda5473945ad7277c0bf9f89958
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Feb 10 11:29:45 2012 -0800
+
+    Directly index into the various *keys arrays
+    
+    The 'keys' array is indexed into by reference to the X11 button
+    number stored in the 'buttons' array. While this may have been
+    useful at some point in time, the benefits have since gone and
+    left behind nothing but headaches.
+    
+    Note that because the association with X11 buttons has been
+    removed, action mapping (via xsetwacom) no longer depends on
+    on the raw mapping (via xorg.conf). For instance, on a system
+    which has 'Option "Button3" "1"' set, use of the command
+    'xsetwacom set <id> button 1 10' will no longer cause *both*
+    button 1 and button 3 to emit button 10. Its unlikely anyone
+    relies on this quirk, but can be easily worked around if
+    necessary.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 9f32b03930802040ba1001258d824aefafd003d0
+Merge: 1a8db01 7a87594
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Jul 13 16:17:39 2012 +1000
+
+    Merge branch 'release-script-fixes'
+
+commit 1a8db01e896514d06f7a69c647aac05832d54ea7
 Author: Ping Cheng <pinglinux@gmail.com>
 Date:   Thu Jul 12 17:23:00 2012 -0700
 
@@ -62,7 +1853,61 @@ Date:   Thu Jul 12 17:23:00 2012 -0700
     
     Signed-off-by: Ping Cheng <pinglinux@gmail.com>
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
-    (cherry picked from commit 1a8db01e896514d06f7a69c647aac05832d54ea7)
+
+commit 7a875941c326db3ff257b6debd79279c62285c9f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jul 10 09:59:03 2012 +1000
+
+    release.sh: support other modules (i.e. libwacom and input-wacom)
+    
+    Add a --module switch to the release script so we can use the same script
+    for all three linuxwacom projects.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 28ddd9285d8dc3273a3ef6bf0a4fc34af97c6546
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jul 3 08:52:52 2012 +1000
+
+    release.sh: complain if tags are missing
+    
+    Previously we only checked the previous tag, not the current one. Move the
+    check up a bit, make it more explicit.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 9d42bcf72b9a0a4699deb29e3781859a1e68017f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jul 10 09:37:55 2012 +1000
+
+    release.sh: remove gz tarball handling
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 5d85fe22a2b8565b80185c110d10a738b51794fb
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jul 3 09:02:37 2012 +1000
+
+    Stop generating .gz files
+    
+    One tarball is enough and bz2 is common enough that we don't need both.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 3ac24ba7aea62f1a12d73a81fca87a4bcfa5568e
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Jun 29 10:16:03 2012 +1000
+
+    Don't init the rotation property on the pad
+    
+    Rotation doesn't do a lot on a device without usable axes
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Chris Bagwell <chris@cnpbagwell.com>
 
 commit f5b89e44aa70d5297330014694c04d46f6e96a72
 Author: Jason Gerecke <killertofu@gmail.com>

@@ -1,0 +1,62 @@
+From a7bfbef7985688aab72e6af98a101c536439ae16 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Mon, 2 Jun 2014 10:30:26 +1000
+Subject: [PATCH 4/6] RHEL6: Revert error checking
+
+Custom RHEL6 patch.
+
+Up to wacom 0.16 (RHEL6.5) the action property handlers were badly broken and
+didn't really check for errors. It would check for type/format and other
+high-level stuff but not for actual invalid values.
+This was added upstream in 0.17.0 with more follow-up bits later.
+
+g-s-d has a bug where mishandling of 32-bit properties submits garbage
+(#1095019) to the driver. The second int value is garbage, the first one is
+valid. This used to work because in the normal GNOME configurations
+the first action is a valid key press, the second is then ignored. The
+automatic key/button release handler releases the pressed key anyway so
+nobody noticed.
+
+With the new code, the property itself cannot be assigned anymore so we have
+broken button mapping, and crash g-s-d if we return BadValue.
+
+Reverting all of the action property changes is high-churn, disabling the error
+handling here restores the original (broken) behaviour but keeps the code
+in-line with upstream.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmXCommand.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/src/wcmXCommand.c b/src/wcmXCommand.c
+index b2ba5a5..d206574 100644
+--- a/src/wcmXCommand.c
++++ b/src/wcmXCommand.c
+@@ -462,7 +462,23 @@ static int wcmSetActionProperty(DeviceIntPtr dev, Atom property,
+ 			default: msg = "UNKNOWN"; break;
+ 		}
+ 		DBG(3, priv, "Action validation failed with code %d (%s)\n", rc, msg);
++#if 0
++		/* RHEL6: up to wacom 0.16 (RHEL6.5) the action property
++		 * handlers were badly broken and didn't consistently check
++		 * for errors. g-s-d has a bug where mishandling of 32-bit
++		 * properties submits garbage to the driver but since the
++		 * button release data is garbage, the automatic release
++		 * code makes it appear to work correctly anyway.
++		 * Handling this case with a BadValue causes g-s-d to crash.
++		 *
++		 * Reverting all of the action property changes is
++		 * high-risk, disabling the error handling here restores the
++		 * original (broken) behaviour but keeps the code in-line
++		 * with upstream.
++		 */
++
+ 		return rc;
++#endif
+ 	}
+ 
+ 	if (!checkonly)
+-- 
+1.9.3
+

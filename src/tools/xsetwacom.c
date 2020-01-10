@@ -570,6 +570,43 @@ static struct modifier specialkeys[] = {
 
 	{"PgUp", "Prior"}, {"PgDn", "Next"},
 
+	{"del", "Delete"}, {"home", "Home"},
+	{"end", "End"},
+
+	{"`", "quoteleft"},
+	{"-", "minus"},
+	{"=", "equal"},
+	{"[", "bracketleft"},
+	{"]", "bracketright"},
+	{"\\", "backslash"},
+	{";", "semicolon"},
+	{"'", "apostrophe"},
+	{",", "comma"},
+	{".", "period"},
+	{"/", "slash"},
+
+	{"~", "asciitilde"},
+	{"!", "exclam"},
+	{"@", "at"},
+	{"#", "numbersign"},
+	{"$", "dollar"},
+	{"%", "percent"},
+	{"^", "asciicircum"},
+	{"&", "ampersand"},
+	{"*", "asterisk"},
+	{"(", "parenleft"},
+	{")", "parenright"},
+	{"_", "underscore"},
+	{"+", "plus"},
+	{"{", "braceleft"},
+	{"}", "braceright"},
+	{"|", "bar"},
+	{":", "colon"},
+	{"\"", "quotedbl"},
+	{"<", "less"},
+	{">", "greater"},
+	{"?", "question"},
+
 	{ NULL, NULL }
 };
 
@@ -884,16 +921,16 @@ static int is_modifier(const char* keysym)
 	return (m->name != NULL);
 }
 
-static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long* data);
-static int special_map_button(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long* data);
-static int special_map_core(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data);
-static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data);
-static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data);
+static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long* data, const size_t size);
+static int special_map_button(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long* data, const size_t size);
+static int special_map_core(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
+static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
+static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 
 /* Valid keywords for the --set ButtonX options */
 struct keywords {
 	const char *keyword;
-	int (*func)(Display*, int, char **, unsigned long*, unsigned long *);
+	int (*func)(Display*, int, char **, unsigned long*, unsigned long *, const size_t size);
 } keywords[] = {
 	{"key", special_map_keystrokes},
 	{"button", special_map_button},
@@ -905,7 +942,7 @@ struct keywords {
 
 /* the "core" keyword isn't supported anymore, we just have this here to
    tell people that. */
-static int special_map_core(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data)
+static int special_map_core(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size)
 {
 	static int once_only = 1;
 	if (once_only)
@@ -917,8 +954,12 @@ static int special_map_core(Display *dpy, int argc, char **argv, unsigned long *
 	return 0;
 }
 
-static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data)
+static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size)
 {
+	if (*ndata + 1 > size) {
+		fprintf(stderr, "Insufficient space to store all commands.\n");
+		return 0;
+	}
 	data[*ndata] = AC_MODETOGGLE;
 
 	*ndata += 1;
@@ -926,8 +967,12 @@ static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned 
 	return 0;
 }
 
-static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data)
+static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size)
 {
+	if (*ndata + 1 > size) {
+		fprintf(stderr, "Insufficient space to store all commands.\n");
+		return 0;
+	}
 	data[*ndata] = AC_DISPLAYTOGGLE;
 
 	*ndata += 1;
@@ -948,7 +993,7 @@ static inline int is_valid_keyword(const char *keyword)
 	return 0;
 }
 
-static int special_map_button(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data)
+static int special_map_button(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size)
 {
 	int nitems = 0;
 	int i;
@@ -976,12 +1021,21 @@ static int special_map_button(Display *dpy, int argc, char **argv, unsigned long
 			need_press = need_release = 1;
 
 		if (sscanf(btn, "%d", &button) != 1)
-			return nitems;
+			break;
 
 
 		TRACE("Button map %d [%s,%s]\n", abs(button),
 				need_press ?  "press" : "",
 				need_release ?  "release" : "");
+
+		if (need_press && need_release && *ndata + nitems + 2 > size) {
+			fprintf(stderr, "Insufficient space to store all commands.\n");
+			break;
+		}
+		else if ((need_press || need_release) && *ndata + nitems + 1 > size) {
+			fprintf(stderr, "Insufficient space to store all commands.\n");
+			break;
+		}
 
 		if (need_press)
 			data[*ndata + nitems++] = AC_BUTTON | AC_KEYBTNPRESS | abs(button);
@@ -990,7 +1044,7 @@ static int special_map_button(Display *dpy, int argc, char **argv, unsigned long
 	}
 
 	*ndata += nitems;
-	return nitems;
+	return i;
 }
 
 /* Return the first keycode to have the required keysym in the current group.
@@ -1012,23 +1066,22 @@ static int keysym_to_keycode(Display *dpy, KeySym sym)
 
 	for (kc = xkb->min_key_code; kc <= xkb->max_key_code; kc++)
 	{
-		KeySym* ks;
 		int i;
 
-		ks = XkbKeySymsPtr(xkb, kc);
 		for (i = 0; i < XkbKeyGroupWidth(xkb, kc, state.group); i++)
-			if (ks[i] == sym)
+			if (XKeycodeToKeysym(dpy, kc, i) == sym)
 				goto out;
 	}
 
 out:
 	return kc;
 }
+
 /*
    Map gibberish like "ctrl alt f2" into the matching AC_KEY values.
    Returns 1 on success or 0 otherwise.
  */
-static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long* data)
+static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long* data, const size_t size)
 {
 	int i;
 	int nitems = 0;
@@ -1076,8 +1129,25 @@ static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned 
 		} else
 			need_press = need_release = 1;
 
+
 		ks = XStringToKeysym(key);
+		if (ks == 0) {
+			key = convert_specialkey(key);
+			ks = XStringToKeysym(key);
+			if (ks == 0)
+				fprintf(stderr, "Warning: unable to map '%s' to a keycode.\n", key);
+		}
+
 		kc = keysym_to_keycode(dpy, ks);
+
+		if (need_press && need_release && *ndata + nitems + 2 > size) {
+			fprintf(stderr, "Insufficient space to store all commands.\n");
+			break;
+		}
+		else if ((need_press || need_release) && *ndata + nitems + 1 > size) {
+			fprintf(stderr, "Insufficient space to store all commands.\n");
+			break;
+		}
 
 		if (need_press)
 			data[*ndata + nitems++] = AC_KEY | AC_KEYBTNPRESS | kc;
@@ -1149,7 +1219,7 @@ static char** strjoinsplit(int argc, char **argv, int *nwords)
  * @param data  Parsed action data
  * @return 'true' if the whole string was parsed sucessfully, else 'false'
  */
-static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* data, unsigned long *nitems)
+static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* data, unsigned long *nitems, const size_t size)
 {
 	int  i = 0;
 	int  nwords = 0;
@@ -1175,19 +1245,19 @@ static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* da
 		nwords = 2;
 	}
 
-	for (i = 0; i < nwords; i++)
+	for (i = 0; i < nwords && *nitems < size; i++)
 	{
 		int j = 0;
 		int keyword_found = 0;
 
-		while (keywords[j].keyword && i < nwords)
+		while (keywords[j].keyword && i < nwords && *nitems < size)
 		{
 			int parsed = 0;
 			if (strcasecmp(words[i], keywords[j].keyword) == 0)
 			{
 				parsed = keywords[j].func(dpy, nwords - i - 1,
 							  &words[i + 1],
-							  nitems, data);
+							  nitems, data, size);
 				i += parsed;
 				keyword_found = 1;
 			}
@@ -1216,9 +1286,10 @@ static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* da
  * the driver can understand.
  *
  * Once we have a list of actions, we can store it in the appropriate
- * child property. If none exists, we must first create one and update
- * the parent list. If we want no action to occur, we can delete the
- * child property and have the parent point to '0' instead.
+ * child property. Action atoms should be pre-created by the server,
+ * so it is an error if one does not exist. To reset the action to its
+ * default, we can have the parent point to '0' (which is a special
+ * signal to the Wacom driver).
  *
  * @param  dpy         X display we want to query
  * @param  dev         X device we want to modify
@@ -1236,7 +1307,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 	unsigned long nitems = 0;
 
 	data = calloc(256, sizeof(long));
-	if (!parse_actions(dpy, argc, argv, data, &nitems))
+	if (!parse_actions(dpy, argc, argv, data, &nitems, 256))
 		goto out;
 
 	/* obtain the button actions Atom */
@@ -1259,16 +1330,20 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 
 	/* set or unset the property */
 	prop = btnact_data[offset];
-	if (nitems > 0)
-	{ /* Setting a new or existing property */
-		if (!prop)
-		{
-			char buff[64];
-			sprintf(buff, "%s action %d", XGetAtomName(dpy, btnact_prop), (offset + 1));
-			prop = XInternAtom(dpy, buff, False);
-			btnact_data[offset] = prop;
-		}
+	if (!prop)
+	{
+		/* The subproperty at the given offset is set to 'None',
+		 * meaning the device does not support its meaning. E.g.
+		 * buttons 4-7 are 'None' since the device doesn't have
+		 * physical buttons relating to them.
+		 */
+		fprintf(stderr, "Unsupported offset into '%s' property.\n",
+			XGetAtomName(dpy, btnact_prop));
+		goto out;
+	}
 
+	if (nitems > 0)
+	{ /* Setting an existing property */
 		/* FIXME: the property containing the key sequence must be
 		 * set before updating the button action properties */
 		XChangeDeviceProperty(dpy, dev, prop, XA_INTEGER, 32,
@@ -1288,8 +1363,6 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 					PropModeReplace,
 					(unsigned char*)btnact_data,
 					btnact_nitems);
-
-		XDeleteDeviceProperty(dpy, dev, prop);
 	}
 
 	XFlush(dpy);
@@ -2674,14 +2747,35 @@ static void test_convert_specialkey(void)
 	char buff[5];
 	struct modifier *m;
 
-	/* make sure at least the default keys (ascii 33 - 126) aren't
-	 * specialkeys */
-	for (i = '!'; i <= '~'; i++)
+	/* make sure a-zA-Z aren't specialkeys */
+	for (i = 'a'; i <= 'z'; i++)
 	{
 		sprintf(buff, "%c", i);
 		converted = convert_specialkey(buff);
 		assert(strcmp(converted, buff) == 0);
 	}
+
+	for (i = 'A'; i <= 'Z'; i++)
+	{
+		sprintf(buff, "%c", i);
+		converted = convert_specialkey(buff);
+		assert(strcmp(converted, buff) == 0);
+	}
+
+	/* punctuation are specialkeys */
+	for (i = '!'; i <= '/'; i++)
+	{
+		sprintf(buff, "%c", i);
+		converted = convert_specialkey(buff);
+		assert(strcmp(converted, buff) != 0);
+	}
+	for (i = ':'; i <= '?'; i++)
+	{
+		sprintf(buff, "%c", i);
+		converted = convert_specialkey(buff);
+		assert(strcmp(converted, buff) != 0);
+	}
+
 
 	for (m = specialkeys; m->name; m++)
 	{

@@ -1,0 +1,42 @@
+From c39148ec00ae3cc5a75ab4369d053c8adb84980b Mon Sep 17 00:00:00 2001
+From: Ping Cheng <pinglinux@gmail.com>
+Date: Thu, 10 Oct 2013 16:14:29 -0700
+Subject: [PATCH 3/6] Decide WCM_LCD by kernel property
+
+kernel 2.6.38 introduced INPUT_PROP_DIRECT to indicate a device is
+a direct touch (onscreen pointer) device. Use it so we do not
+have to add individual devcies for that feature.
+
+When INPUT_PROP_DIRECT was added, INPUT_PROP_MAX and EVIOCGPROP were
+also defined. So, we only need to make sure INPUT_PROP_DIRECT is defined.
+
+Signed-off-by: Ping Cheng <pingc@wacom.com>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 2bd942fa6dcaf02c1b825878c3d89badd9319a7f)
+---
+ src/wcmValidateDevice.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/wcmValidateDevice.c b/src/wcmValidateDevice.c
+index 1a5e722..9c0294b 100644
+--- a/src/wcmValidateDevice.c
++++ b/src/wcmValidateDevice.c
+@@ -308,6 +308,15 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
+ 			break;
+ 	}
+ 
++#ifdef INPUT_PROP_DIRECT
++	{
++		unsigned long prop[NBITS(INPUT_PROP_MAX)] = {0};
++
++		ioctl(pInfo->fd, EVIOCGPROP(sizeof(prop)), prop);
++		if (ISBITSET(prop, INPUT_PROP_DIRECT))
++			TabletSetFeature(priv->common, WCM_LCD);
++	}
++#endif
+ 	if (ISBITSET(common->wcmKeys, BTN_TOOL_PEN))
+ 		TabletSetFeature(priv->common, WCM_PEN);
+ 
+-- 
+1.9.0
+

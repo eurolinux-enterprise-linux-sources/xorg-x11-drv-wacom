@@ -1,0 +1,37 @@
+From b84ddeb46f5e8a4a2b1a46c6fbc790ae952b442b Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Thu, 8 May 2014 14:20:41 +1000
+Subject: [PATCH 6/6] Define the required bits for property checking
+
+RHEL6 compat: enable this by default, current kernels don't provide it but
+this way we don't need to rebuild on future kernels.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmValidateDevice.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/wcmValidateDevice.c b/src/wcmValidateDevice.c
+index 9c0294b..c08dfab 100644
+--- a/src/wcmValidateDevice.c
++++ b/src/wcmValidateDevice.c
+@@ -26,6 +26,16 @@
+ #include <fcntl.h>
+ #include <unistd.h>
+ 
++#ifndef INPUT_PROP_DIRECT
++#define INPUT_PROP_DIRECT 0x01
++#endif
++#ifndef INPUT_PROP_MAX
++#define INPUT_PROP_MAX 0x1f
++#endif
++#ifndef EVIOCGPROP
++#define EVIOCGPROP(len)         _IOC(_IOC_READ, 'E', 0x09, len)
++#endif
++
+ /* wcmCheckSource - Check if there is another source defined this device
+  * before or not: don't add the tool by hal/udev if user has defined at least
+  * one tool for the device in xorg.conf. One device can have multiple tools
+-- 
+1.9.0
+

@@ -23,7 +23,6 @@
 #include <xorg-server.h>
 #include <xorgVersion.h>
 
-#include <wacom-util.h>
 #include "Xwacom.h"
 
 /* max number of input events to read in one read call */
@@ -37,6 +36,8 @@
 #include <xf86Xinput.h>
 #include <mipointer.h>
 #include <X11/Xatom.h>
+
+#include <wacom-util.h>
 
 #if GET_ABI_MAJOR(ABI_XINPUT_VERSION) < 18
 #define LogMessageVerbSigSafe xf86MsgVerb
@@ -112,7 +113,7 @@ struct _WacomModule
 extern Bool wcmOpen(InputInfoPtr pInfo);
 
 /* device autoprobing */
-const char *wcmEventAutoDevProbe (InputInfoPtr pInfo);
+char *wcmEventAutoDevProbe (InputInfoPtr pInfo);
 
 /* common tablet initialization regime */
 int wcmInitTablet(InputInfoPtr pInfo, const char* id, float version);
@@ -140,7 +141,7 @@ extern int wcmIsDuplicate(const char* device, InputInfoPtr pInfo);
 extern int wcmDeviceTypeKeys(InputInfoPtr pInfo);
 
 /* hotplug */
-extern int wcmNeedAutoHotplug(InputInfoPtr pInfo, const char **type);
+extern int wcmNeedAutoHotplug(InputInfoPtr pInfo, char **type);
 extern void wcmHotplugOthers(InputInfoPtr pInfo, const char *basename);
 
 /* setup */
@@ -181,6 +182,7 @@ extern void set_absolute(InputInfoPtr pInfo, Bool absolute);
 extern WacomCommonPtr wcmRefCommon(WacomCommonPtr common);
 extern void wcmFreeCommon(WacomCommonPtr *common);
 extern WacomCommonPtr wcmNewCommon(void);
+extern void usbListModels(void);
 
 enum WacomSuppressMode {
 	SUPPRESS_NONE = 8,	/* Process event normally */

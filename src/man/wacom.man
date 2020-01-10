@@ -159,9 +159,9 @@ Default to "on" for Tablet PCs; "off" for all other models. Only available
 on the stylus tool.
 .TP 4
 .B Option \fI"Touch"\fP \fI"on"|"off"\fP
-enables the touch event for Tablet PC that supports touch feature,  i.e., 
-system cursor moves when user touches the tablet.  Default to "on" for 
-Tablet PCs with touch feature; "off" for all other models.
+enables touch events for touch devices,  i.e., system cursor moves when
+user touches the tablet.  Default to "on" for devices that support touch;
+"off" for all other models.
 .TP 4
 .B Option \fI"Rotate"\fP \fI"CW"|"CCW"|"HALF"|"NONE"\fP
 rotates the tablet orientation counterclockwise (CCW) or clockwise (CW) or 180 degrees (HALF). 
@@ -197,8 +197,14 @@ paths on the tablet. There are 12 levels, specified by the integers between
 "number" will be logged into the Xorg log file. This option is only
 available if the driver was built with debugging support.
 .TP 4
+.B Option \fI"GrabDevice"\fP \fI"bool"\fP
+sets whether the underlying event device will be grabbed by the driver to
+prevent the data from leaking to /dev/input/mice. When enabled, while the
+X server is running, no other programs will be able to read the event
+stream.  Default: "false".
+.TP 4
 .B Option \fI"CursorProx"\fP \fI"number"\fP
-sets the max distance from tablet to stop reporting movement for cursor in relative mode. 
+sets the max distance from tablet to stop reporting movement for the cursor.
 Default for Intuos series is 10, for Graphire series (including Volitos) is
 42. Only available for the cursor/puck device.
 .TP 4
@@ -226,8 +232,9 @@ The threshold applies to the normalised pressure range of [0..2048].
 The default is 27.
 .TP 4
 .B Option \fI"Gesture"\fP \fI"bool"\fP
-Enable or disable gesture support on the device. Default: off unless the
-tablet supports multi-touch.
+Enable or disable multi-finger in-driver gesture support on the device. Default: off
+unless the tablet supports multi-touch. Note that disabling this option may allow
+the desktop environment to detect multi-finger gestures instead.
 .TP 4
 .B Option \fI"ZoomDistance"\fP \fI"number"\fP
 If

@@ -18,19 +18,17 @@ extern int xf86SetSerialSpeed (int fd, int speed);
 
 extern OPTTYPE xf86ReplaceIntOption(OPTTYPE optlist, const char *name, const int val);
 extern OPTTYPE xf86AddNewOption(OPTTYPE head, const char *name, const char *val);
+extern void xf86OptionListFree(OPTTYPE optlist);
 extern char* xf86OptionName(OPTTYPE opt);
 extern CONST char* xf86FindOptionValue(OPTTYPE options, const char *name);
 extern int xf86NameCmp(const char *s1, const char *s2);
 extern char* xf86CheckStrOption(OPTTYPE optlist, const char *name, char *deflt);
+extern int xf86CheckBoolOption(OPTTYPE list, const char *name, int deflt);
 
 
 extern char * xf86SetStrOption(OPTTYPE optlist, const char *name, CONST char *deflt);
 extern int xf86SetBoolOption(OPTTYPE optlist, const char *name, int deflt);
-extern OPTTYPE xf86AddNewOption(OPTTYPE head, const char *name, const char *val);
-extern char* xf86OptionName(OPTTYPE opt);
 extern char *xf86OptionValue(OPTTYPE opt);
-extern int xf86NameCmp(const char *s1, const char *s2);
-extern char * xf86CheckStrOption(OPTTYPE optlist, const char *name, char *deflt);
 extern void xf86AddEnabledDevice(InputInfoPtr pInfo);
 extern void xf86RemoveEnabledDevice(InputInfoPtr pInfo);
 extern Atom XIGetKnownProperty(char *name);
@@ -121,6 +119,8 @@ XIRegisterPropertyHandler(DeviceIntPtr         dev,
                           int (*DeleteProperty) (DeviceIntPtr dev,
                                                  Atom property));
 extern int InitProximityClassDeviceStruct(DeviceIntPtr dev);
+extern void LogMessageVerbSigSafe(MessageType type, int verb, const char *format, ...);
+extern void xf86MsgVerb(MessageType type, int verb, const char *format, ...);
 extern void xf86Msg(MessageType type, const char *format, ...);
 
 extern void
@@ -191,3 +191,12 @@ extern void TimerFree(OsTimerPtr timer);
 
 extern int xf86BlockSIGIO (void);
 extern void xf86UnblockSIGIO (int wasset);
+
+#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 16
+extern Bool InitTouchClassDeviceStruct(DeviceIntPtr device, unsigned int max_touches,
+    unsigned int mode, unsigned int numAxes);
+extern ValuatorMask *valuator_mask_new(int num_valuators);
+extern void valuator_mask_set(ValuatorMask *mask, int valuator, int data);
+extern void xf86PostTouchEvent(DeviceIntPtr dev, uint32_t touchid, uint16_t type,
+    uint32_t flags, const ValuatorMask *mask);
+#endif
