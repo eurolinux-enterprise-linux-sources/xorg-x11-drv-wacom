@@ -25,9 +25,6 @@
 
 #include "Xwacom.h"
 
-/* max number of input events to read in one read call */
-#define MAX_EVENTS 50
-
 #define inline __inline__
 #include <xf86.h>
 #include <string.h>
@@ -43,11 +40,8 @@
 #define LogMessageVerbSigSafe xf86MsgVerb
 #endif
 
-/*****************************************************************************
- * Unit test hack
- ****************************************************************************/
-#ifdef DISABLE_STATIC
-#define static
+#ifndef SW_MUTE_DEVICE
+#define SW_MUTE_DEVICE	0x0e
 #endif
 
 /******************************************************************************
@@ -112,6 +106,9 @@ struct _WacomModule
 /* Open the device with the right serial parmeters */
 extern Bool wcmOpen(InputInfoPtr pInfo);
 
+/* Close the device */
+extern void wcmClose(InputInfoPtr pInfo);
+
 /* device autoprobing */
 char *wcmEventAutoDevProbe (InputInfoPtr pInfo);
 
@@ -127,13 +124,6 @@ void wcmEvent(WacomCommonPtr common, unsigned int channel, const WacomDeviceStat
 /* dispatches data to XInput event system */
 void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds);
 
-/* generic area check for xf86Wacom.c, wcmCommon.c and wcmXCommand.c */
-Bool wcmPointInArea(WacomToolAreaPtr area, int x, int y);
-Bool wcmAreaListOverlap(WacomToolAreaPtr area, WacomToolAreaPtr list);
-
-/* calculate the proper tablet to screen mapping factor */
-void wcmMappingFactor(InputInfoPtr pInfo);
-
 /* validation */
 extern Bool wcmIsAValidType(InputInfoPtr pInfo, const char* type);
 extern Bool wcmIsWacomDevice (char* fname);
@@ -148,22 +138,18 @@ extern void wcmHotplugOthers(InputInfoPtr pInfo, const char *basename);
 extern Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary, Bool is_dependent);
 extern Bool wcmPostInitParseOptions(InputInfoPtr pInfo, Bool is_primary, Bool is_dependent);
 extern int wcmParseSerials(InputInfoPtr pinfo);
-extern void wcmInitialCoordinates(InputInfoPtr pInfo, int axes);
-extern void wcmInitialScreens(InputInfoPtr pInfo);
 
 extern int wcmDevSwitchModeCall(InputInfoPtr pInfo, int mode);
 extern int wcmDevSwitchMode(ClientPtr client, DeviceIntPtr dev, int mode);
 
 /* run-time modifications */
-extern void wcmChangeScreen(InputInfoPtr pInfo, int value);
 extern int wcmTilt2R(int x, int y, double offset);
 extern void wcmEmitKeycode(DeviceIntPtr keydev, int keycode, int state);
 extern void wcmSoftOutEvent(InputInfoPtr pInfo);
+extern void wcmCancelGesture(InputInfoPtr pInfo);
 
 extern void wcmRotateTablet(InputInfoPtr pInfo, int value);
 extern void wcmRotateAndScaleCoordinates(InputInfoPtr pInfo, int* x, int* y);
-extern void wcmVirtualTabletSize(InputInfoPtr pInfo);
-extern void wcmVirtualTabletPadding(InputInfoPtr pInfo);
 
 extern int wcmCheckPressureCurveValues(int x0, int y0, int x1, int y1);
 extern int wcmGetPhyDeviceID(WacomDevicePtr priv);
@@ -175,6 +161,7 @@ extern int wcmDeleteProperty(DeviceIntPtr dev, Atom property);
 extern void InitWcmDeviceProperties(InputInfoPtr pInfo);
 extern void wcmUpdateRotationProperty(WacomDevicePtr priv);
 extern void wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial, int id);
+extern void wcmUpdateHWTouchProperty(WacomDevicePtr priv, int touch);
 
 /* Utility functions */
 extern Bool is_absolute(InputInfoPtr pInfo);
@@ -191,6 +178,35 @@ enum WacomSuppressMode {
 };
 
 /****************************************************************************/
+
+#ifndef UNIT_TESTS
+
+# define TEST_NON_STATIC static
+
+#else
+
+# define TEST_NON_STATIC
+
+/* For test suite */
+/* xf86Wacom.c */
+extern void wcmInitialToolSize(InputInfoPtr pInfo);
+
+/* wcmConfig.c */
+extern int wcmSetType(InputInfoPtr pInfo, const char *type);
+
+/* wcmCommon.c */
+extern int getScrollDelta(int current, int old, int wrap, int flags);
+extern int getWheelButton(int delta, int action_up, int action_dn);
+extern int rebasePressure(const WacomDevicePtr priv, const WacomDeviceState *ds);
+extern int normalizePressure(const WacomDevicePtr priv, const int raw_pressure);
+extern enum WacomSuppressMode wcmCheckSuppress(WacomCommonPtr common,
+						const WacomDeviceState* dsOrig,
+						WacomDeviceState* dsNew);
+
+/* wcmUSB.c */
+extern int mod_buttons(int buttons, int btn, int state);
+#endif /* UNIT_TESTS */
+
 #endif /* __XF86WACOM_H */
 
 /* vim: set noexpandtab tabstop=8 shiftwidth=8: */

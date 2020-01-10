@@ -8,8 +8,8 @@
 
 Summary:    Xorg X11 wacom input driver
 Name:       xorg-x11-drv-wacom
-Version:    0.23.0
-Release:    4%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Version:    0.32.0
+Release:    1%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:        http://www.x.org
 License:    GPLv2+
 Group:      User Interface/X Hardware Support
@@ -23,9 +23,6 @@ Source2: commitid
 Source0: http://prdownloads.sourceforge.net/linuxwacom/xf86-input-wacom-%{version}.tar.bz2
 %endif
 
-Patch001: 0001-Threshold-applies-to-pen-tools-only.patch
-Patch002: 0002-Fix-missing-pad-expresskey-events-issue.patch
-Patch003: 0003-Decide-WCM_LCD-by-kernel-property.patch
 Patch004: 0004-RHEL6-Revert-error-checking.patch
 Patch005: 0005-Grab-the-device-by-default.patch
 Patch006: 0006-Define-the-required-bits-for-property-checking.patch
@@ -52,9 +49,6 @@ X.Org X11 wacom input driver for Wacom tablets.
 
 %prep
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
-%patch001 -p1
-%patch002 -p1
-%patch003 -p1
 %patch004 -p1
 %patch005 -p1
 %patch006 -p1
@@ -63,7 +57,9 @@ X.Org X11 wacom input driver for Wacom tablets.
 autoreconf --force -v --install || exit 1
 # empty conf dir to force HAL
 %configure --disable-static --disable-silent-rules \
-           --with-xorg-conf-dir=''
+           --with-xorg-conf-dir='' \
+           --without-systemd-unit-dir \
+           --without-udev-rules-dir
 make %{_smp_mflags}
 
 %install
@@ -94,6 +90,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1/xsetwacom.1*
 %{_datadir}/hal/fdi/policy/20thirdparty/10-wacom.fdi
 %{_bindir}/xsetwacom
+%{_bindir}/isdv4-serial-inputattach
 
 %package devel
 Summary:    Xorg X11 wacom input driver development package
@@ -116,6 +113,12 @@ X.Org X11 wacom input driver development files.
 %{_bindir}/isdv4-serial-debugger
 
 %changelog
+* Wed Nov 25 2015 Peter Hutterer <peter.hutterer@redhat.com> 0.32.0-1
+- wacom 0.32.0 (#1248619)
+
+* Wed Nov 11 2015 Adam Jackson <ajax@redhat.com> 0.23.0-5
+- Rebuild for server 1.17
+
 * Mon Jun 02 2014 Peter Hutterer <peter.hutterer@redhat.com> 0.23.0-4
 - Disable action property error checking to ignore invalid values from g-s-d
   (#1077478)

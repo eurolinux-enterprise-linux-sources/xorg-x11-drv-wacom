@@ -55,6 +55,10 @@
 #define XIGetKnownProperty(prop) 0
 #endif
 
+#ifndef XI86_SERVER_FD
+#define XI86_SERVER_FD 0x20
+#endif
+
 static int wcmDevOpen(DeviceIntPtr pWcm);
 static int wcmReady(InputInfoPtr pInfo);
 static void wcmDevReadInput(InputInfoPtr pInfo);
@@ -86,28 +90,12 @@ static void wcmKbdCtrlCallback(DeviceIntPtr di, KeybdCtrl* ctrl)
 }
 
 /*****************************************************************************
- * wcmVirtualTabletPadding(InputInfoPtr pInfo)
- ****************************************************************************/
-
-void wcmVirtualTabletPadding(InputInfoPtr pInfo)
-{
-	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
-
-	priv->leftPadding = 0;
-	priv->topPadding = 0;
-
-	if (!is_absolute(pInfo)) return;
-
-	DBG(10, priv, "x=%d y=%d \n", priv->leftPadding, priv->topPadding);
-	return;
-}
-
-/*****************************************************************************
  * wcmInitialToolSize --
  *    Initialize logical size and resolution for individual tool.
  ****************************************************************************/
 
-static void wcmInitialToolSize(InputInfoPtr pInfo)
+TEST_NON_STATIC void
+wcmInitialToolSize(InputInfoPtr pInfo)
 {
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
 	WacomCommonPtr common = priv->common;
@@ -123,12 +111,18 @@ static void wcmInitialToolSize(InputInfoPtr pInfo)
 	}
 	else
 	{
+		priv->minX = common->wcmMinX;
+		priv->minY = common->wcmMinY;
 		priv->maxX = common->wcmMaxX;
 		priv->maxY = common->wcmMaxY;
 		priv->resolX = common->wcmResolX;
 		priv->resolY = common->wcmResolY;
 	}
 
+	if (!priv->topX)
+		priv->topX = priv->minX;
+	if (!priv->topY)
+		priv->topY = priv->minY;
 	if (!priv->bottomX)
 		priv->bottomX = priv->maxX;
 	if (!priv->bottomY)
@@ -303,8 +297,6 @@ static int wcmInitAxes(DeviceIntPtr pWcm)
 		label = None;
 		mode = Absolute;
 		min_res = max_res = res = 1;
-		min = 0;
-		max = 1;
 
 		min = MIN_PAD_RING;
 		max = MAX_PAD_RING;
@@ -348,12 +340,6 @@ static int wcmDevInit(DeviceIntPtr pWcm)
 	nbbuttons = min(max(nbbuttons + 4, 7), WCM_MAX_BUTTONS);
 	nbkeys = nbbuttons;         /* Same number of keys since any button may be 
 	                             * configured as an either mouse button or key */
-
-	if (!nbbuttons)
-		nbbuttons = nbkeys = 1;	    /* Xserver 1.5 or later crashes when 
-			            	     * nbbuttons = 0 while sending a beep 
-			             	     * This is only a workaround. 
-				     	     */
 
 	DBG(10, priv,
 		"(%s) %d buttons, %d keys, %d axes\n",
@@ -437,7 +423,6 @@ static int wcmDevInit(DeviceIntPtr pWcm)
 	if (!IsPad(priv))
 	{
 		wcmInitialToolSize(pInfo);
-		wcmMappingFactor(pInfo);
 	}
 
 	if (!wcmInitAxes(pWcm))
@@ -487,7 +472,7 @@ Bool wcmIsWacomDevice (char* fname)
 char *wcmEventAutoDevProbe (InputInfoPtr pInfo)
 {
 	/* We are trying to find the right eventX device */
-	int i, wait = 0;
+	int i = 0, wait = 0;
 	const int max_wait = 2000;
 
 	/* If device is not available after Resume, wait some ms */
@@ -543,6 +528,22 @@ Bool wcmOpen(InputInfoPtr pInfo)
 }
 
 /*****************************************************************************
+ * wcmClose --
+ ****************************************************************************/
+
+void wcmClose(InputInfoPtr pInfo)
+{
+	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
+
+	DBG(1, priv, "closing device file\n");
+
+	if (pInfo->fd > -1 && !(pInfo->flags & XI86_SERVER_FD)) {
+		xf86CloseSerial(pInfo->fd);
+		pInfo->fd = -1;
+	}
+}
+
+/*****************************************************************************
  * wcmDevOpen --
  *    Open the physical device and init information structs.
  ****************************************************************************/
@@ -557,18 +558,17 @@ static int wcmDevOpen(DeviceIntPtr pWcm)
 
 	DBG(10, priv, "\n");
 
+	/* If fd management is done by the server, skip common fd handling */
+	if (pInfo->flags & XI86_SERVER_FD)
+		goto got_fd;
+
 	/* open file, if not already open */
 	if (common->fd_refs == 0)
 	{
 		if ((wcmOpen (pInfo) != Success) || !common->device_path)
 		{
 			DBG(1, priv, "Failed to open device (fd=%d)\n", pInfo->fd);
-			if (pInfo->fd >= 0)
-			{
-				DBG(1, priv, "Closing device\n");
-				xf86CloseSerial(pInfo->fd);
-			}
-			pInfo->fd = -1;
+			wcmClose(pInfo);
 			return FALSE;
 		}
 
@@ -594,6 +594,7 @@ static int wcmDevOpen(DeviceIntPtr pWcm)
 		common->fd_refs++;
 	}
 
+got_fd:
 	/* start the tablet data */
 	if (model->Start && (model->Start(pInfo) != Success))
 		return !Success;
@@ -738,16 +739,17 @@ static void wcmDevClose(InputInfoPtr pInfo)
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
 	WacomCommonPtr common = priv->common;
 
+	/* If fd management is done by the server, skip common fd handling */
+	if (pInfo->flags & XI86_SERVER_FD)
+		return;
+
 	DBG(4, priv, "Wacom number of open devices = %d\n", common->fd_refs);
 
 	if (pInfo->fd >= 0)
 	{
-		pInfo->fd = -1;
 		if (!--common->fd_refs)
-		{
-			DBG(1, common, "Closing device; uninitializing.\n");
-			xf86CloseSerial (common->fd);
-		}
+			wcmClose(pInfo);
+		pInfo->fd = -1;
 	}
 }
 

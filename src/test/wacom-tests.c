@@ -152,7 +152,7 @@ test_rebase_pressure(void)
 	ds.pressure = 10;
 
 	/* Pressure in out-of-proximity means get new preloaded pressure */
-	priv.oldProximity = 0;
+	priv.oldState.proximity = 0;
 
 	/* make sure we don't touch priv, not really needed, the compiler should
 	 * honor the consts but... */
@@ -164,7 +164,7 @@ test_rebase_pressure(void)
 	assert(memcmp(&priv, &base, sizeof(priv)) == 0);
 
 	/* Pressure in-proximity means rebase to new minimum */
-	priv.oldProximity = 1;
+	priv.oldState.proximity = 1;
 
 	base = priv;
 
@@ -179,13 +179,13 @@ test_normalize_pressure(void)
 	InputInfoRec pInfo = {0};
 	WacomDeviceRec priv = {0};
 	WacomCommonRec common = {0};
-	WacomDeviceState ds = {0};
 	int pressure, prev_pressure = -1;
 	int i, j;
 
 	priv.common = &common;
 	priv.pInfo = &pInfo;
-	pInfo.name = "Wacom test device";
+	pInfo.name = strdupa("Wacom test device");
+	common.wcmPressureRecalibration = 1;
 
 	priv.minPressure = 0;
 
@@ -198,9 +198,9 @@ test_normalize_pressure(void)
 
 		for (i = 0; i <= common.wcmMaxZ; i++)
 		{
-			ds.pressure = i;
+			pressure = i;
 
-			pressure = normalizePressure(&priv, &ds);
+			pressure = normalizePressure(&priv, pressure);
 			assert(pressure >= 0);
 			assert(pressure <= FILTER_PRESSURE_RES);
 
@@ -216,14 +216,12 @@ test_normalize_pressure(void)
 	 * minPressure and ignores actual pressure. This would be a bug in the
 	 * driver code, but we might as well test for it. */
 	priv.minPressure = 10;
-	ds.pressure = 0;
 
-	prev_pressure = normalizePressure(&priv, &ds);
+	prev_pressure = normalizePressure(&priv, 0);
 	for (i = 0; i < priv.minPressure; i++)
 	{
-		ds.pressure = i;
 
-		pressure = normalizePressure(&priv, &ds);
+		pressure = normalizePressure(&priv, i);
 
 		assert(pressure >= 0);
 		assert(pressure < FILTER_PRESSURE_RES);
@@ -247,7 +245,9 @@ test_initial_size(void)
 	WacomDeviceRec priv = {0};
 	WacomCommonRec common = {0};
 
-	int minx, maxx, miny, maxy, xres, yres;
+	/* pin to some numbers */
+	int xres = 1920, yres = 1600;
+	int minx, maxx = 2 * xres, miny, maxy = 2 * yres;
 
 	info.private = &priv;
 	priv.common = &common;

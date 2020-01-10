@@ -18,17 +18,32 @@
 #  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 #  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-bin_PROGRAMS = xsetwacom isdv4-serial-debugger
+bin_PROGRAMS = xsetwacom isdv4-serial-debugger isdv4-serial-inputattach
 
-AM_CPPFLAGS = -I$(top_srcdir)/include
-AM_CFLAGS = $(XORG_CFLAGS) $(X11_CFLAGS)
-AM_LDFLAGS = $(X11_LIBS)
+AM_CPPFLAGS = -I$(top_srcdir)/include $(CWARNFLAGS)
+AM_CFLAGS = $(CWARNFLAGS)
 
+shared_sources = tools-shared.h tools-shared.c
+
+isdv4_serial_debugger_SOURCES = isdv4-serial-debugger.c $(shared_sources)
+
+isdv4_serial_inputattach_SOURCES = isdv4-serial-inputattach.c $(shared_sources)
+isdv4_serial_inputattach_CFLAGS = $(UDEV_CFLAGS)
+isdv4_serial_inputattach_LDADD = $(UDEV_LIBS)
+
+xsetwacom_SOURCES = xsetwacom.c
+xsetwacom_CFLAGS = $(X11_CFLAGS)
+xsetwacom_LDADD = $(X11_LIBS)
+
+if FUZZINTERFACE
+xsetwacom_CFLAGS += -DBUILD_FUZZINTERFACE
+endif
 
 if UNITTESTS
 check_PROGRAMS = xsetwacom-test
 xsetwacom_test_SOURCES=xsetwacom.c
 xsetwacom_test_CFLAGS=-DBUILD_TEST $(X11_CFLAGS)
+xsetwacom_test_LDADD = $(X11_LIBS)
 
 TESTS=$(check_PROGRAMS)
 endif

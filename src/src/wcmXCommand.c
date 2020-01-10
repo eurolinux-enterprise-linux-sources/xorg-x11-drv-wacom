@@ -79,27 +79,28 @@ int wcmDevSwitchMode(ClientPtr client, DeviceIntPtr dev, int mode)
 	return wcmDevSwitchModeCall(pInfo, mode);
 }
 
-Atom prop_devnode;
-Atom prop_rotation;
-Atom prop_tablet_area;
-Atom prop_pressurecurve;
-Atom prop_serials;
-Atom prop_serial_binding;
-Atom prop_strip_buttons;
-Atom prop_wheel_buttons;
-Atom prop_tv_resolutions;
-Atom prop_cursorprox;
-Atom prop_threshold;
-Atom prop_suppress;
-Atom prop_touch;
-Atom prop_gesture;
-Atom prop_gesture_param;
-Atom prop_hover;
-Atom prop_tooltype;
-Atom prop_btnactions;
-Atom prop_product_id;
+static Atom prop_devnode;
+static Atom prop_rotation;
+static Atom prop_tablet_area;
+static Atom prop_pressurecurve;
+static Atom prop_serials;
+static Atom prop_serial_binding;
+static Atom prop_strip_buttons;
+static Atom prop_wheel_buttons;
+static Atom prop_cursorprox;
+static Atom prop_threshold;
+static Atom prop_suppress;
+static Atom prop_touch;
+static Atom prop_hardware_touch;
+static Atom prop_gesture;
+static Atom prop_gesture_param;
+static Atom prop_hover;
+static Atom prop_tooltype;
+static Atom prop_btnactions;
+static Atom prop_product_id;
+static Atom prop_pressure_recal;
 #ifdef DEBUG
-Atom prop_debuglevels;
+static Atom prop_debuglevels;
 #endif
 
 /**
@@ -240,8 +241,8 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 	}
 
 	values[0] = common->tablet_id;
-	values[1] = priv->old_serial;
-	values[2] = priv->old_device_id;
+	values[1] = priv->oldState.serial_num;
+	values[2] = priv->oldState.device_id;
 	values[3] = priv->cur_serial;
 	values[4] = priv->cur_device_id;
 	prop_serials = InitWcmAtom(pInfo->dev, WACOM_PROP_SERIALIDS, XA_INTEGER, 32, 5, values);
@@ -263,6 +264,11 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 
 	values[0] = common->wcmTouch;
 	prop_touch = InitWcmAtom(pInfo->dev, WACOM_PROP_TOUCH, XA_INTEGER, 8, 1, values);
+
+	if (common->wcmHasHWTouchSwitch && IsTouch(priv)) {
+		values[0] = common->wcmHWTouchSwitchState;
+		prop_hardware_touch = InitWcmAtom(pInfo->dev, WACOM_PROP_HARDWARE_TOUCH, XA_INTEGER, 8, 1, values);
+	}
 
 	if (IsStylus(priv)) {
 		values[0] = !common->wcmTPCButton;
@@ -298,6 +304,13 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 		prop_wheel_buttons = InitWcmAtom(pInfo->dev, WACOM_PROP_WHEELBUTTONS, XA_ATOM, 32, 6, values);
 		for (i = 0; i < 6; i++)
 			wcmResetWheelAction(pInfo, i);
+	}
+
+	if (IsStylus(priv) || IsEraser(priv)) {
+		values[0] = common->wcmPressureRecalibration;
+		prop_pressure_recal = InitWcmAtom(pInfo->dev,
+						  WACOM_PROP_PRESSURE_RECAL,
+						  XA_INTEGER, 8, 1, values);
 	}
 
 	values[0] = common->vendor_id;
@@ -417,13 +430,11 @@ static int wcmCheckActionProperty(WacomDevicePtr priv, Atom property, XIProperty
 					return BadValue;
 				}
 				break;
-			case AC_DISPLAYTOGGLE:
 			case AC_MODETOGGLE:
 				break;
 			default:
 				DBG(3, priv, "ERROR: Unknown command\n");
 				return BadValue;
-				break;
 		}
 	}
 
@@ -601,6 +612,56 @@ void wcmUpdateRotationProperty(WacomDevicePtr priv)
 	}
 }
 
+static CARD32
+touchTimerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
+{
+	InputInfoPtr pInfo = arg;
+	WacomDevicePtr priv = pInfo->private;
+	WacomCommonPtr common = priv->common;
+	XIPropertyValuePtr prop;
+	CARD8 prop_value;
+	int sigstate;
+	int rc;
+
+	sigstate = xf86BlockSIGIO();
+
+	rc = XIGetDeviceProperty(pInfo->dev, prop_hardware_touch, &prop);
+	if (rc != Success || prop->format != 8 || prop->size != 1)
+	{
+		xf86Msg(X_ERROR, "%s: Failed to update hardware touch state.\n",
+			pInfo->name);
+		return 0;
+	}
+
+	prop_value = common->wcmHWTouchSwitchState;
+	XIChangeDeviceProperty(pInfo->dev, prop_hardware_touch, XA_INTEGER,
+			       prop->format, PropModeReplace,
+			       prop->size, &prop_value, TRUE);
+
+	xf86UnblockSIGIO(sigstate);
+
+	return 0;
+}
+
+/**
+ * Update HW touch property when its state is changed by touch switch
+ */
+void
+wcmUpdateHWTouchProperty(WacomDevicePtr priv, int hw_touch)
+{
+	WacomCommonPtr common = priv->common;
+
+	if (hw_touch == common->wcmHWTouchSwitchState)
+		return;
+
+	common->wcmHWTouchSwitchState = hw_touch;
+
+	/* This function is called during SIGIO. Schedule timer for property
+	 * event delivery outside of signal handler. */
+	priv->touch_timer = TimerSet(priv->touch_timer, 0 /* reltime */,
+				      1, touchTimerFunc, priv->pInfo);
+}
+
 /**
  * Only allow deletion of a property if it is not being used by any of the
  * button actions.
@@ -645,8 +706,8 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 			if ((values[0] == -1) && (values[1] == -1) &&
 					(values[2] == -1) && (values[3] == -1))
 			{
-				values[0] = 0;
-				values[1] = 0;
+				values[0] = priv->minX;
+				values[1] = priv->minX;
 				values[2] = priv->maxX;
 				values[3] = priv->maxY;
 			}
@@ -781,6 +842,19 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 
 		if (!checkonly && common->wcmTouch != values[0])
 			common->wcmTouch = values[0];
+	} else if (property == prop_hardware_touch)
+	{
+		if (common->wcmHasHWTouchSwitch)
+		{
+			/* If we get here from wcmUpdateHWTouchProperty, we know
+			 * the wcmHWTouchSwitchState has been set internally
+			 * already, so we can reply with success. */
+			if (prop->size == 1 && prop->format == 8)
+				if (((CARD8*)prop->data)[0] == common->wcmHWTouchSwitchState)
+					return Success;
+		}
+
+		return BadValue; /* read-only */
 	} else if (property == prop_gesture)
 	{
 		CARD8 *values = (CARD8*)prop->data;
@@ -848,6 +922,21 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 	{
 		int nbuttons = priv->nbuttons < 4 ? priv->nbuttons : priv->nbuttons + 4;
 		return wcmSetActionsProperty(dev, property, prop, checkonly, nbuttons, priv->btn_actions, priv->keys);
+	} else if (property == prop_pressure_recal)
+	{
+		CARD8 *values = (CARD8*)prop->data;
+
+		if (prop->size != 1 || prop->format != 8)
+			return BadValue;
+
+		if ((values[0] != 0) && (values[0] != 1))
+			return BadValue;
+
+		if (!IsStylus(priv) && !IsEraser(priv))
+			return BadMatch;
+
+		if (!checkonly)
+			common->wcmPressureRecalibration = values[0];
 	} else
 	{
 		Atom *handler = NULL;
@@ -873,12 +962,12 @@ int wcmGetProperty (DeviceIntPtr dev, Atom property)
 		uint32_t values[5];
 
 		values[0] = common->tablet_id;
-		values[1] = priv->old_serial;
-		values[2] = priv->old_device_id;
+		values[1] = priv->oldState.serial_num;
+		values[2] = priv->oldState.device_id;
 		values[3] = priv->cur_serial;
 		values[4] = priv->cur_device_id;
 
-		DBG(10, priv, "Update to serial: %d\n", priv->old_serial);
+		DBG(10, priv, "Update to serial: %d\n", priv->oldState.serial_num);
 
 		return XIChangeDeviceProperty(dev, property, XA_INTEGER, 32,
 					      PropModeReplace, 5,

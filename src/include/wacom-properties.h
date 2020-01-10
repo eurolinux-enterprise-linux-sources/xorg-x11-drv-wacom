@@ -78,6 +78,9 @@
 /* BOOL, 1 value */
 #define WACOM_PROP_TOUCH "Wacom Enable Touch"
 
+/* BOOL, 1 value, read-only */
+#define WACOM_PROP_HARDWARE_TOUCH "Wacom Hardware Touch Switch"
+
 /* 8 bit, 1 values */
 #define WACOM_PROP_ENABLE_GESTURE "Wacom Enable Touch Gesture"
 
@@ -103,6 +106,10 @@
  */
 #define WACOM_PROP_DEBUGLEVELS "Wacom Debug Levels"
 
+/* BOOL, 1 value,
+   TRUE == pressure renormalization enabled, FALSE == pressure renormalization disabled
+*/
+#define WACOM_PROP_PRESSURE_RECAL "Wacom Pressure Recalibration"
 
 /* The following are tool types used by the driver in WACOM_PROP_TOOL_TYPE
  * or in the 'type' field for XI1 clients. Clients may check for one of

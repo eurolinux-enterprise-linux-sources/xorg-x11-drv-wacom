@@ -1,3 +1,2479 @@
+commit a626adda70bf7e514a6715ba0fe63874808ca5e0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Nov 23 15:20:02 2015 -0800
+
+    wacom 0.32.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 380a443fb7ee96e6a7fe13405a3c8d9682b729c6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Sep 1 13:56:29 2015 -0700
+
+    Streamline Sourceforge login for release.sh
+    
+    There's no particular reason that I see for us needing to enact a 30
+    second sleep anymore, nor do we have to allocate a pseudo-TTY that
+    the user then has to manually exit from. Creating a non-interactive
+    session without sleep seems to work fine now.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 9e216247b549f95c0511b5b3243e1527cabcb161
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 13 10:32:05 2015 -0700
+
+    Don't rely on IsPad() when trying to undo kernel event filtering
+    
+    Commit e9f95de fixed an issue where the pointer would jump around if the
+    kernel's duplicate event filtering had removed the X or Y position from
+    the initial "entering proximity" packet. The fix involved requesting the
+    current axis value from the kernel, but only if we weren't dealing with
+    the pad (since the pad never sends position data, and may not even have
+    those axes). Unfortunately, the check used 'IsPad(priv)', which may
+    return incorrect results at this point in the program flow.* This can
+    cause the pointer jumps to occur anyway if the driver (incorrectly)
+    believes the events to be coming from the pad as described in bug #286.
+    
+    To fix this, the check is changed to rely on 'ds->device_type' which
+    provides accurate information.
+    
+    *It appears that the 'pInfo' passed into 'usbDispatchEvents' may be of
+    any X device that shares the same underlying kernel device. It is not
+    until later in 'wcmEvent' that we use 'findTool' to find the appropriate
+    device based on the 'ds->device_type'.
+    
+    http://sourceforge.net/p/linuxwacom/bugs/286/
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 4c17c6a0dd224b66379c52ea8b24ab961b908aa0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 6 11:59:39 2015 -0700
+
+    Update release.sh script from Xorg
+    
+    The latest-and-greatest copy of release.sh from Xorg now replaces our
+    current version of the script which largely dates back to 2010. This
+    script brings several new features along with it, with stronger checks
+    and PGP signing probably being the two worth noting.
+    
+    A very small number of modifications to the upstream version of this
+    script (commit 65cb27b) have been made to support this project. The only
+    one of note is a change to 'generate_announce' which changes it to
+    use the 'Reply-To' header instead of 'Cc' (since the announce list will
+    bounce unauthorized messages back).
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 31d779debc5b624278c7dc1768168c54e790b4ec
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 17 17:47:06 2015 -0700
+
+    wacom 0.31.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e566a1909329955c44de3e65449cb6485362bb73
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 10 12:34:20 2015 -0700
+
+    wacom 0.30.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 4893844f3f4b417ae38af4dfc49f35d7fbac41b2
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Jul 28 17:40:00 2015 -0700
+
+    Modify wcmMaxCursorDist calculation to support non-inverted protocol 4
+    
+    Distance values reported by the puck tool on protocol 4 tablets (e.g.
+    the Graphire4) have an inverted scale compared to other devices and
+    tools. That is to say, the values are at their maximum while the puck
+    is resting on the tablet and minimum just prior to going out of prox.
+    The way that xf86-input-wacom handles this is with explicit protocol
+    version checks, which limits our ability to fix this issue going
+    forward (when libinput/Wayland begin to rule the desktop).
+    
+    This patch changes how the driver calculates wcmMaxCursorDist so that
+    it is able to gracefully handle the day we fix this kernel bug.
+    Instead of storing the minimum/maximum value ever seen on the tablet
+    (switching between codepaths based on protocol 5/4) we store the value
+    that is seen whenever the user clicks a button. It is reasonably safe
+    to assume that this occurs with the puck on the tablet and thus will
+    be the correct value. Even if the user happens to click with the puck
+    raised above the surface, a subsuqent click *on* the surface will
+    reset the value.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 0173f52dadc7f60019a594ff9d5503605f9a4134
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 29 10:23:31 2015 -0700
+
+    xsetwacom: Fix regression in simple button mapping
+    
+    Commit 273ecfe introduces a bug where simple button mappings (e.g.
+    "set <id> button 2 3") ignore the final argument and always use '1'
+    instead. This us because the variable that we sscanf the button
+    number into is subsuquently reused as a loop control variable before
+    being sprintf'd out.
+    
+    http://sourceforge.net/p/linuxwacom/mailman/message/34246572/
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 69ddccf81c67191026612bad45a0a4192a55e1d2
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Jun 9 18:06:04 2015 -0700
+
+    wacom 0.30.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8b76a75a0475d0dada34acb86d0c91b4bc12e4b5
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri May 29 16:59:30 2015 -0700
+
+    wacom 0.29.99.1
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit c14e9b485d2690245ba347879d2dd9fec9e7030f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Apr 24 09:16:59 2015 -0700
+
+    xsetwacom: Fix 'get_mapped_area' ("maptooutput next") on 64-bit
+    
+    Using the "maptooutput next" command fails on 64-bit systems,
+    with results ranging from always mapping the pointer to the
+    first head to displaying errors about the transformation matrix
+    being non-rectangular.
+    
+    This is a result of the 'get_mapped_area' function expecting
+    32-bit properties returned by the server to take up only 4
+    bytes of memory. This is the case on 32-bit systems, but not
+    on 64-bit ones. This was partially addressed in bc5fd9e, but
+    not here.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 273ecfeccfceb2c2a92cfb4e26078c11a3454396
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Apr 27 11:21:32 2015 -0700
+
+    asan: xsetwacom: Cleanup xsetwacom memory leaks
+    
+    Address several leaks present in the code, as well as two uses of 'free' where
+    'XFree' should have been used instead.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit af3869e5bda2e2f0a8f0203d11096406cf8cea6b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Apr 27 10:01:36 2015 -0700
+
+    ubsan: Use 'unsigned int' for button mask in 'wcmSendButtons'
+    
+    ../src/wcmCommon.c:137:12: runtime error: left shift of 1 by 31 places cannot be represented in type 'int'
+    SUMMARY: AddressSanitizer: undefined-behavior ../src/wcmCommon.c:137
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit d9ed47b1b200e1d6a89d11be75ee6346eb2229be
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Apr 27 09:28:31 2015 -0700
+
+    ubsan: Prevent out-of-bounds array write
+    
+    ../src/wcmCommon.c:709:2: runtime error: index 6 out of bounds for type 'int [priv->naxes]'
+    SUMMARY: AddressSanitizer: undefined-behavior ../src/wcmCommon.c:709
+    
+    The 'valuators' array is dynamically sized based on how many axes the
+    device has (typically 6, but possibly 7 if the WCM_DUALRING feature is
+    set). Unfortunately, we don't pay attention to how many axes actually
+    exist when filling the array and end up writing one 'int' worth of
+    data past the end in most circumstances.
+    
+    This appears to have not triggered any issues in the past simply because
+    with a typical stack layout, the code as written (valuators[6] = v6)
+    won't do anything (since &valuators[6] == &v6). Even stil...
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 423735fc0eee0206d65ee974b019fa0ea2090572
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Apr 27 09:15:09 2015 -0700
+
+    ubsan: Fix alignment issues
+    
+    Memcpy the data from wherever it is in memory to a 'struct input_event'
+    that is living on the stack with proper alignment. Fixes the following
+    complaints from Clang's undefined sanitizer:
+    
+    ../src/wcmUSB.c:966:13: runtime error: member access within misaligned address 0x62e00008e494 for type 'const struct input_event', which requires 8 byte alignment
+    0x62e00008e494: note: pointer points here
+      78 00 00 00 db 5b 3e 55  00 00 00 00 d9 d7 03 00  00 00 00 00 03 00 00 00  e9 09 00 00 db 5b 3e 55
+                  ^
+    SUMMARY: AddressSanitizer: undefined-behavior ../src/wcmUSB.c:966
+    ../src/wcmUSB.c:966:38: runtime error: member access within misaligned address 0x62e00008e494 for type 'const struct input_event', which requires 8 byte alignment
+    0x62e00008e494: note: pointer points here
+      78 00 00 00 db 5b 3e 55  00 00 00 00 d9 d7 03 00  00 00 00 00 03 00 00 00  e9 09 00 00 db 5b 3e 55
+                  ^
+    SUMMARY: AddressSanitizer: undefined-behavior ../src/wcmUSB.c:966
+    ../src/wcmUSB.c:983:14: runtime error: member access within misaligned address 0x62e00008e4f4 for type 'const struct input_event', which requires 8 byte alignment
+    0x62e00008e4f4: note: pointer points here
+      01 00 00 00 db 5b 3e 55  00 00 00 00 d9 d7 03 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+                  ^
+    SUMMARY: AddressSanitizer: undefined-behavior ../src/wcmUSB.c:983
+    ../src/wcmUSB.c:1000:21: runtime error: member access within misaligned address 0x62e00008e4f4 for type 'const struct input_event', which requires 8 byte alignment
+    0x62e00008e4f4: note: pointer points here
+      01 00 00 00 db 5b 3e 55  00 00 00 00 d9 d7 03 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+                  ^
+    SUMMARY: AddressSanitizer: undefined-behavior ../src/wcmUSB.c:1000
+    ../src/wcmUSB.c:1000:48: runtime error: member access within misaligned address 0x62e00008e4f4 for type 'const struct input_event', which requires 8 byte alignment
+    0x62e00008e4f4: note: pointer points here
+      01 00 00 00 db 5b 3e 55  00 00 00 00 d9 d7 03 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+                  ^
+    SUMMARY: AddressSanitizer: undefined-behavior ../src/wcmUSB.c:1000
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit d95dfe6ecd9e90f81bc133a561fa6336ac58170d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 9 16:31:57 2015 -0700
+
+    afl: xsetwacom: Check that argc is in range before dereferencing argv
+    
+    These functions access argv[0] before checking that argc is at least
+    1. In the interest of correctness, swap it around so that the check
+    occurs before the dereference.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit c7db2dab7bc803ee84bfec1d8a90e1e608b6cb09
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 9 16:30:01 2015 -0700
+
+    afl: xsetwacom: Do not allow negative button numbers
+    
+    Currently its possible to provide a negative (or zero) button number
+    on the commandline, which will be dutifully translated into a negative
+    offset. Detect this and throw an error if encountered.
+    
+    Signed-off-by: Jason Gerecke <jason.jgerecke@wacom.com>
+
+commit 162cf8d54e8858b8c1cbc96c49f4ffa73716b7e8
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 9 16:35:36 2015 -0700
+
+    xsetwacom: Add ability to read args from stdin for fuzzing
+    
+    Add a new "--enable-fuzz-interface" configuration option which will
+    cause xsetwacom to read NUL-separated arguments from stdin (for
+    example: `echo -en 'list\0devices' | xsetwacom`). This makes it
+    easier to plug into fuzzing software for debugging.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 4416168933e058cee6a5e0df803c9c822f8fa63d
+Author: Benjamin Tissoires <benjamin.tissoires@redhat.com>
+Date:   Fri Mar 13 11:24:27 2015 -0400
+
+    Allow PAD only interfaces without EV_ABS and/or EV_X/Y to report events
+    
+    commit 0cfe113 (Allow PAD only interface without setting up EV_ABS
+    and/or EV_X/Y) allows xf86-input-wacom to handle Pad only interface but
+    such interface do not report any events.
+    
+    We need to call usbWcmInitPadState() to be able to forward events.
+    
+    Signed-off-by: Benjamin Tissoires <benjamin.tissoires@redhat.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 50fcf5eb5062a552959861453ece65a097bfe9f4
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Mar 12 10:26:28 2015 +1000
+
+    Coverity: remove dead code
+    
+    Two lines above we assign nbbuttons = min(7, MAXBUTTONS), the latter of which
+    is 32.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit d4a12274138829e79003d8bae597d6feec0b3680
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Mar 12 10:11:49 2015 +1000
+
+    tools: make baudrate unsigned int to shut up compiler
+    
+    Supplying a negative baudrate will now be implicitly converted to the unsigned
+    int equivalent. So don't do that.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 19c116f6e410c42f68fd67841f3c73276045cde6
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Mar 12 10:00:20 2015 +1000
+
+    Coverity: silence "ioctl return value not checked" warnings
+    
+    Move two ioctls up so that if they fail we don't have to clean up an alloc.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 13edd12f9c28b6be9c0cda3874081da1dd78132a
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 11 12:14:00 2015 +1000
+
+    Coverity: fix potential negative array subscript
+    
+    isdv4ParseTouchPacket and usbChooseChannel return -1 on error
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 1c068af8ebe42461095367ce5c6a03cbc8b33e6c
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 11 12:08:22 2015 +1000
+
+    Coverity: fix coverity complaints about unchecked return values
+    
+    The fread() result is now always terminated with \0. Don't think that's ever
+    hit but it gives us a good reason to use the return value so we don't get more
+    complaints.
+    
+    Interestingly, a (void) cast doesn't silence gcc but it does silence coverity.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 63705716a44030e5d4e3bea6bd19bd28fa132635
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 11 12:04:08 2015 +1000
+
+    Coverity: fix potential NULL-pointer dereferences
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit a6cdf28476062f70c1481b255e7d22d814f73440
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Mar 16 16:53:03 2015 -0700
+
+    wacom 0.29.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit a8d43fceb38cad8386b87dd4069e4022e05f5d7c
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 11 11:48:59 2015 +1000
+
+    Fix release script
+    
+    Apparently the path has changed
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 5ce9a72fb8249af500e88bde3e6ec0239cd0b8ac
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 9 14:06:56 2015 +1000
+
+    tools: Add missing includes for fstat(2)
+    
+    http://build.gnome.org/continuous/buildmaster/builds/2015/03/09/8/build/log-xf86-input-wacom.txt
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 8317dc44c142a2d38e85e6d2955236d7dd900450
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 9 13:53:48 2015 +1000
+
+    Add missing includes for fstat(2)
+    
+    http://build.gnome.org/continuous/buildmaster/builds/2015/03/09/3/build/log-xf86-input-wacom.txt
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit e97d82e253635ec2e7c592ed24b772b231eb8b38
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Mar 5 17:50:35 2015 -0800
+
+    wacom 0.28.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 0af1fcfa3212e099267921410aedd4d75b6c2deb
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 11:52:27 2015 -0800
+
+    doc: Fix doxygen.conf warnings
+    
+    Remove the obsolete XML_SCHEMA and XML_DTD definitions, as well
+    as clear the definition of DOT_FONTNAME.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 122d70031ddd2d414f2e739e57903b676c159baa
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 10:27:40 2015 -0800
+
+    xsetwacom: Ease static analysis of get_mapped_area
+    
+    Fixes warnings about the "width", "height", "x_org", and "y_org"
+    variables in "set_output_next" potentially being undefined. Although
+    careful consideration of the code shows that they must be defined,
+    GCC's static analyzer apparently isn't quite up to the task. This
+    commit rewrites the loop/switch construct to be more straightforward
+    and analyzable.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 3e89ef073e3327826c33241f555f59d3e3dea3f7
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 10:10:50 2015 -0800
+
+    tools: Fix up const warnings
+    
+    Resolve numerous "initialization discards ‘const’ qualifier from pointer
+    target type" warnings that were present.
+    
+    Note that in the process of fixing the warning in 'parse_actions', a
+    small buffer overflow was also corrected (the statement
+    'sprintf(new_words[0], "+%d", i)' writes one character more than
+    originally existed in new_words[0]).
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit fc28497c0415ecd3487769303eee32f6c8315886
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 14:42:00 2015 -0800
+
+    xsetwacom: Use 'fabs' instead of 'abs' where necessary
+    
+    Fixes multiple clang warnings about the use of 'abs' with a floating-
+    point argument.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 820e6826e9e9cf9672a6e343a0b9134036e50ab8
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 10:32:58 2015 -0800
+
+    xsetwacom: Remove unused variable from 'strjoinsplit'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit bfb53ce07ce3cde26ab3e46805a251e79c9eb78d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 10:42:50 2015 -0800
+
+    xsetwacom: Fix format string provided used by 'get_button'
+    
+    xsetwacom.c: In function ‘get_button’:
+    xsetwacom.c:2080:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘Atom’ [-Wformat=]
+      print_button_value(param, offset, "%d", prop);
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 4e7fe9882407cb58b0150b7d2d1d7ca1c7f89418
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 10:40:14 2015 -0800
+
+    xsetwacom: Declare printf attribute on print_{,button_}value
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit cdbada765adac161ef4f0e36c16301a7f9b3980e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Jan 29 10:10:12 2015 -0800
+
+    tools: Build with CWARNFLAGS
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 86dd3e22ab1b07dd2777959a5a2d2ea7da38f74f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jan 16 18:33:39 2015 -0800
+
+    xsetwacom: Allow "get <id> all" to iterate over all available buttons
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 9ee5383553ac32e98c7f0e25a1c950f35ffeff62
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jan 16 17:29:40 2015 -0800
+
+    xsetwacom: Add print_button_value function
+    
+    Setting a button value requires a slightly different format than most
+    other properties. In particular, they require the presence of a button
+    number either concatenated onto the prefix 'Button' (for xorg.conf format)
+    or as a seperate parameter (for shell format).
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2f5af03ac1b7ac9748b2ee1d5493aca1de87a8d0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jan 16 18:11:20 2015 -0800
+
+    xsetwacom: Don't try to print "set" commands for readonly properties
+    
+    Both FORMAT_XORG_CONF and FORMAT_SHELL are formatted for setting in xorg.conf
+    or xsetwacom. It makes no sense to bother printing out the value of readonly
+    values for these two cases though since it is impossible to set them.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 902b174cbde602f00b08d40ae1b949ea0f154a7f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jan 16 18:00:41 2015 -0800
+
+    xsetwacom: Print proper names of xorg.conf options
+    
+    Some properties have different names between xorg.conf and xsetwacom.
+    This adds an 'x11name' member to each parmeter which stores the name
+    of the associated xorg.conf property if it exists. If this member has
+    not been set for any particular parameter while the xorg.conf format
+    is selected than an error will be printed.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 162d83cf2c6cf809debdb2beb96a45313f4e8a36
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jan 16 17:02:40 2015 -0800
+
+    xsetwacom: Print error/warning messages on stderr
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 27b713eebf606b9f21df26d9ac5cc6a489b90a01
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jan 12 09:30:18 2015 -0800
+
+    xsetwacom: Use effective XKB group number in keysym_to_keycode
+    
+    XKB allows a user to define multiple groups (layouts) for their
+    keyboard, switching between them on the fly. When converting keycodes to
+    KeySyms one has to be careful about which group they look at. Not every
+    keycode has to define KeySyms for every available group, and XKB
+    calculates an "effective" group number in such cases. At the moment
+    xsetwacom only uses the "current" group number which won't always work.
+    
+    The following commands exhibit one example of how the bug may be
+    reproduced:
+    
+        $ setxkbmap us,dvorak -option grp:caps_toggle
+        $ xsetwacom set <id> button 1 key ctrl
+        [ button 1 should work as expected ]
+        [ now press CAPSLOCK to switch to Dvorak ]
+        $ xsetwacom set <id> button 1 key ctrl
+        [ a warning is printed if the bug exists ]
+    
+    To reset the keyboard back e.g. to the 'us' layout after running the
+    above commands:
+    
+        $ setxkbmap us -option
+    
+    Fixes: http://sourceforge.net/p/linuxwacom/bugs/269/
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 335f885bcc15d7ba85bcd2b6000434c39f1beb13
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jan 5 13:38:53 2015 -0800
+
+    wacom 0.28.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 47539b4e4005cda70405bd8f2a29214cabba2d64
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Dec 22 15:49:52 2014 -0800
+
+    wacom 0.27.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8d138bf21a54f73249f443af747f01f4a0069fc0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Dec 22 14:54:08 2014 -0800
+
+    xsetwacom: Warn if keycode could not be found
+    
+    As described at SF #267, xsetwacom provides no indication if a valid
+    keysym has no keycode in the current keyboard layout. This provides
+    such a warning and updates language of a preceeding warning to be
+    more accurate.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit fd5371dc28dfd1bdabd9b50bdac00047aadc39ab
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Dec 5 10:38:21 2014 -0800
+
+    Allow xsetwacom to recognize 'insert' as a key
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit debc83723927f0fb3d16098f8b7388bdb6db855b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Dec 5 13:39:26 2014 -0800
+
+    Ensure input device fd gets closed after use
+    
+    Fixes a minor error in commit 52fe01c which results in the driver
+    invalidating an fd prior to (potentially) closing it. This reversed
+    order causes us to leak the fd and can result in eventual exhasution.
+    
+    Fixes SF #263
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5aec962eb930aa7758eb0e3a7c32f951b4b3d935
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Mon Nov 24 13:46:56 2014 -0800
+
+    Remove hardcoded function name - usbProbeKeys
+    
+    "in the future we should use __func__ instead of harcoding
+    function names." -- Peter Hutterer
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 0cfe1139f39fd322a4360b282fee6297c8ac00d6
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Mon Nov 24 13:42:18 2014 -0800
+
+    Allow PAD only interface without setting up EV_ABS and/or EV_X/Y
+    
+    Wacom kernel driver has been merged to HID subsystem. As a bonus,
+    we also allow PAD to report its data on its own interface. To declare
+    the exact event types, we should not set EV_ABS or EV_X/Y for PADs
+    on most tablets.
+    
+    However, xf86-input-wacom is not designed to handle this case. This
+    patch makes future PAD-only, or even expresskey-only, tablets work
+    properly.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+
+commit cea8074a0b987efb064cfbebe1de4c684592b928
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Nov 3 17:00:26 2014 -0800
+
+    wacom 0.27.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit bac8243d680d9cde531aaa00c048299017d32962
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Oct 27 15:35:18 2014 -0700
+
+    wacom 0.26.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8f85692a19bd34dae77071a296a14c01a491cf4a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 17 16:05:10 2014 -0700
+
+    Reset wcmGestureState to current device state upon gesture start
+    
+    The scroll and zoom gestures use of how far the fingers have travelled
+    as a way to determine how many times to send the scroll/zoom event.
+    When a gesture first starts, however, the fingers have already moved a
+    large distance simply to have the gesture be recognized. This may cause
+    a rapid and undesired "catch up" effect due to the large built-up delta.
+    
+    To work around this, when a gesture starts, we reset the wcmGestureState
+    so that the functions are working with a clean slate and do not see the
+    large delta.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit f6ae56b0cf1cbf298ebbc5380f51010cea430154
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Sep 11 16:13:05 2014 -0700
+
+    Set the active driver to NULL before uninitalizing the device
+    
+    If a device being used is disconnected, it may be possible to find
+    yourself in a situation where a second device performs an "active"
+    check and dereferences a null (freed in 'wcmFree') 'priv' pointer.
+    To prevent this from occuring, always check if the device being
+    uninitialized is considered 'active' and unset it if so.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e9f95de119875e06b9ec775f5938506dcc1b2d6e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Sep 9 17:02:48 2014 -0700
+
+    Fix pointer jump when tool enters prox with filtered coordinate
+    
+    When a tool enters proximity, the usbChooseChannel function zeros
+    out one of the WacomDeviceState structures in the common->wcmChannel
+    array and returns its index. That state is then initalized using
+    the input events recieved from the kernel, and is assumed to be
+    a complete description by the time it is handed off to the wcmEvent
+    function.
+    
+    The kernel's duplicate event filtering can cause problems for this,
+    however. If the value of the axis as it enters prox is identical to
+    its value when it left prox, the kernel will not send an event for
+    it (leaving the associated WacomDeviceState field zero). If this
+    occurs with the X and/or Y axis, the pointer will jump to the wrong
+    screen location.
+    
+    To prevent the pointer from jumping around, we check if the X or Y
+    value of the WacomDeviceState are still zero after reading through
+    an enter-prox packet. If either is, we request its current value
+    from the kernel just in case it was filtered out. Other axes may be
+    affected by this bug, but should not cause as many problems.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 0ed6d892e045de4e9674fa81318ee8ee7b3fc384
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Sep 18 12:08:25 2014 -0700
+
+    Strengthen condition that pad may never be arbitrated pointer control
+    
+    The pad should never be arbitrated pointer control since it is not a
+    pointer controlling device. The `check_arbitrated_control` function
+    performs its checks in the wrong order, however, and will grant control
+    if no other device is currently active.
+    
+    This can cause touch to be disabled for "generic protocol" devices (e.g.
+    Intuos, Bamboo, etc.) until a pen is used because touch is the lowest-
+    priority device to be arbitrated access. For protocol 4/5 devices (e.g.
+    Intuos 5/4/3 and Cintiq) this can also lock out touch, but only if the
+    ExpressKey was pressed prior to the beginning of the touch, and only
+    while it remains held.
+    
+    This patch strengthens the condition that the pad may never be granted
+    control by making it the first thing checked.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 018c632ada56d8e07a11ce89ec589e3a2dc36293
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 17 19:05:44 2014 -0700
+
+    gcc-warning: -Wunused-variable
+    
+    ../src/wcmXCommand.c:90:13: warning: 'prop_tv_resolutions' defined but not used [-Wunused-variable]
+     static Atom prop_tv_resolutions;
+                 ^
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 885e04b36054da9072a6add5307ef0d9d538ee62
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 10:40:50 2014 -0700
+
+    clang-warning: -Wmissing-variable-declarations
+    
+    ../src/wcmConfig.c:701:16: warning: no previous extern declaration for non-static variable 'WACOM' [-Wmissing-variable-declarations]
+    InputDriverRec WACOM =
+                   ^
+    ../src/wcmXCommand.c:82:6: warning: no previous extern declaration for non-static variable 'prop_devnode' [-Wmissing-variable-declarations]
+    Atom prop_devnode;
+         ^
+    ../src/wcmXCommand.c:83:6: warning: no previous extern declaration for non-static variable 'prop_rotation' [-Wmissing-variable-declarations]
+    Atom prop_rotation;
+         ^
+    ../src/wcmXCommand.c:84:6: warning: no previous extern declaration for non-static variable 'prop_tablet_area' [-Wmissing-variable-declarati$
+    Atom prop_tablet_area;
+         ^
+    ../src/wcmXCommand.c:85:6: warning: no previous extern declaration for non-static variable 'prop_pressurecurve' [-Wmissing-variable-declara$
+    Atom prop_pressurecurve;
+         ^
+    ../src/wcmXCommand.c:86:6: warning: no previous extern declaration for non-static variable 'prop_serials' [-Wmissing-variable-declarations]
+    Atom prop_serials;
+         ^
+    ../src/wcmXCommand.c:87:6: warning: no previous extern declaration for non-static variable 'prop_serial_binding' [-Wmissing-variable-declar$
+    Atom prop_serial_binding;
+         ^
+    ../src/wcmXCommand.c:88:6: warning: no previous extern declaration for non-static variable 'prop_strip_buttons' [-Wmissing-variable-declara$
+    Atom prop_strip_buttons;
+         ^
+    ../src/wcmXCommand.c:89:6: warning: no previous extern declaration for non-static variable 'prop_wheel_buttons' [-Wmissing-variable-declara$
+    Atom prop_wheel_buttons;
+         ^
+    ../src/wcmXCommand.c:90:6: warning: no previous extern declaration for non-static variable 'prop_tv_resolutions' [-Wmissing-variable-declar$
+    Atom prop_tv_resolutions;
+         ^
+    ../src/wcmXCommand.c:91:6: warning: no previous extern declaration for non-static variable 'prop_cursorprox' [-Wmissing-variable-declaratio$
+    Atom prop_cursorprox;
+         ^
+    ../src/wcmXCommand.c:92:6: warning: no previous extern declaration for non-static variable 'prop_threshold' [-Wmissing-variable-declaration$
+    Atom prop_threshold;
+         ^
+    ../src/wcmXCommand.c:93:6: warning: no previous extern declaration for non-static variable 'prop_suppress' [-Wmissing-variable-declarations]
+    Atom prop_suppress;
+         ^
+    ../src/wcmXCommand.c:94:6: warning: no previous extern declaration for non-static variable 'prop_touch' [-Wmissing-variable-declarations]
+    Atom prop_touch;
+         ^
+    ../src/wcmXCommand.c:98:6: warning: no previous extern declaration for non-static variable 'prop_hover' [-Wmissing-variable-declarations]
+    Atom prop_hover;
+         ^
+    ../src/wcmXCommand.c:99:6: warning: no previous extern declaration for non-static variable 'prop_tooltype' [-Wmissing-variable-declarations]
+    Atom prop_tooltype;
+         ^
+    ../src/wcmXCommand.c:100:6: warning: no previous extern declaration for non-static variable 'prop_btnactions' [-Wmissing-variable-declarati$
+    Atom prop_btnactions;
+         ^
+    ../src/wcmXCommand.c:101:6: warning: no previous extern declaration for non-static variable 'prop_product_id' [-Wmissing-variable-declarati$
+    Atom prop_product_id;
+         ^
+    ../src/wcmXCommand.c:102:6: warning: no previous extern declaration for non-static variable 'prop_pressure_recal' [-Wmissing-variable-decla$
+    Atom prop_pressure_recal;
+         ^
+    ../src/wcmXCommand.c:104:6: warning: no previous extern declaration for non-static variable 'prop_debuglevels' [-Wmissing-variable-declarat$
+    Atom prop_debuglevels;
+         ^
+    ../src/wcmXCommand.c:95:6: warning: no previous extern declaration for non-static variable 'prop_hardware_touch' [-Wmissing-variable-declar$
+    Atom prop_hardware_touch;
+         ^
+    ../src/wcmXCommand.c:96:6: warning: no previous extern declaration for non-static variable 'prop_gesture' [-Wmissing-variable-declarations]
+    Atom prop_gesture;
+         ^
+    ../src/wcmXCommand.c:97:6: warning: no previous extern declaration for non-static variable 'prop_gesture_param' [-Wmissing-variable-declara$
+    Atom prop_gesture_param;
+         ^
+    xsetwacom.c:476:3: warning: no previous extern declaration for non-static variable 'deprecated_parameters' [-Wmissing-variable-declarations]
+    } deprecated_parameters[] =
+      ^
+    xsetwacom.c:953:3: warning: no previous extern declaration for non-static variable 'keywords' [-Wmissing-variable-declarations]
+    } keywords[] = {
+      ^
+    isdv4-serial-debugger.c:44:5: warning: no previous extern declaration for non-static variable 'verbose' [-Wmissing-variable-declarations]
+    int verbose = 0;
+        ^
+    isdv4-serial-inputattach.c:41:5: warning: no previous extern declaration for non-static variable 'verbose' [-Wmissing-variable-declarations]
+    int verbose;
+        ^
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 48a6c6121a0259939d515afbffbd4de057058266
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 12:01:57 2014 -0700
+
+    clang-warning: -Wmissing-field-initializers
+    
+    ../src/wcmISDV4.c:100:2: warning: missing field 'DetectConfig' initializer [-Wmissing-field-initializers]
+            };
+            ^
+    ../src/wcmTouchFilter.c:254:30: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}}, dsLast[2] = {{0}};
+                                        ^
+    ../src/wcmTouchFilter.c:254:49: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}}, dsLast[2] = {{0}};
+                                                           ^
+    ../src/wcmTouchFilter.c:314:30: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}}, dsLast[2] = {{0}};
+                                        ^
+    ../src/wcmTouchFilter.c:314:49: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}}, dsLast[2] = {{0}};
+                                                           ^
+    ../src/wcmTouchFilter.c:395:30: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}}, dsLast[2] = {{0}};
+                                        ^
+    ../src/wcmTouchFilter.c:395:49: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}}, dsLast[2] = {{0}};
+                                                           ^
+    ../src/wcmTouchFilter.c:587:30: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}};
+                                        ^
+    ../src/wcmTouchFilter.c:613:30: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}};
+                                        ^
+    ../src/wcmTouchFilter.c:714:30: warning: missing field 'device_id' initializer [-Wmissing-field-initializers]
+            WacomDeviceState ds[2] = {{0}};
+                                        ^
+    xsetwacom.c:465:9: warning: missing field 'desc' initializer [-Wmissing-field-initializers]
+            { NULL }
+                   ^
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 7af2c515bdd8e918efbec23c03fa1e705c186aea
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 10:01:24 2014 -0700
+
+    clang-warning: -Wunused-macros
+    
+    xsetwacom.c:20:9: warning: macro is not used [-Wunused-macros]
+     #define WACOM_TOOLS
+             ^
+    isdv4-serial-debugger.c:22:9: warning: macro is not used [-Wunused-macros]
+     #define WACOM_TOOLS
+             ^
+    tools-shared.c:20:9: warning: macro is not used [-Wunused-macros]
+     #define WACOM_TOOLS
+             ^
+    isdv4-serial-inputattach.c:22:9: warning: macro is not used [-Wunused-macros]
+     #define WACOM_TOOLS
+             ^
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2bab0353aef20f8e5e738d8e96317dd5fe69e190
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 09:51:26 2014 -0700
+
+    clang-warning: -Wunreachable-code-return
+    
+    ../src/wcmUSB.c:1140:9: warning: 'return' will never be executed [-Wunreachable-code-return]
+            return 0;
+                   ^
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit c33c80e6d5977e33aaf8f7a9cec15a05ec88cf78
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 09:32:26 2014 -0700
+
+    clang-warning: -Wunreachable-code-break
+    
+    ../src/wcmXCommand.c:439:5: warning: 'break' will never be executed [-Wunreachable-code-break]
+                                    break;
+                                    ^~~~~
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 75960a16fbf3f6ce2b0030cb703a6a389ab8998f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 14 12:30:58 2014 -0700
+
+    clang-warning: -Wdocumentation-unknown-command
+    
+    ../src/wcmCommon.c:740:4: warning: unknown command tag name [-Wdocumentation-unknown-command]
+     * @retval SUPPRESS_ALL Ignore this event completely.
+       ^
+    ../src/wcmCommon.c:1041:4: warning: unknown command tag name [-Wdocumentation-unknown-command]
+     * @rebaes
+       ^
+    ../src/wcmUSB.c:1120:4: warning: unknown command tag name [-Wdocumentation-unknown-command]
+     * @device_id id of the device
+       ^
+    ../src/wcmValidateDevice.c:524:52: warning: unknown command tag name [-Wdocumentation-unknown-command]
+     * hotplug. The server will come back and call the @wcmHotplugDevice
+                                                       ^
+    ../src/wcmValidateDevice.c:753:4: warning: unknown command tag name [-Wdocumentation-unknown-command]
+     * @retvalue True on success or False otherwise.
+       ^
+    ../src/wcmValidateDevice.c:1020:4: warning: unknown command tag name [-Wdocumentation-unknown-command]
+     * @retvalue True on success or False otherwise.
+       ^
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit a97d4aacb79fee63f9c45807fa47ae5d4d0b63f2
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 14 12:19:55 2014 -0700
+
+    clang-warning: -Wmissing-prototypes
+    
+    xsetwacom.c:2098:6: warning: no previous prototype for function 'get_mapped_area' [-Wmissing-prototypes]
+    Bool get_mapped_area(Display *dpy, XDevice *dev, int *width, int *height, int *x_org, int *y_org)
+         ^
+    isdv4-serial-inputattach.c:81:5: warning: no previous prototype for function 'get_baud_rate' [-Wmissing-prototypes]
+    int get_baud_rate(int fd)
+        ^
+    isdv4-serial-inputattach.c:117:6: warning: no previous prototype for function 'sighandler' [-Wmissing-prototypes]
+    void sighandler(int signum)
+         ^
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 37421251edb509e6fe60d2a506e9177008c7a603
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 14 11:53:20 2014 -0700
+
+    clang-warning: -Wconditional-uninitialized
+    
+    ../src/xf86Wacom.c:511:16: warning: variable 'i' may be uninitialized when used here [-Wconditional-uninitialized]
+                    pInfo->name, i + 1, wait);
+    
+    xsetwacom.c:2308:36: warning: variable 'x' may be uninitialized when used here [-Wconditional-uninitialized]
+                    return set_output_area(dpy, dev, x, y, width, height);
+                                                     ^
+    xsetwacom.c:2308:39: warning: variable 'y' may be uninitialized when used here [-Wconditional-uninitialized]
+                    return set_output_area(dpy, dev, x, y, width, height);
+                                                        ^
+    xsetwacom.c:2308:42: warning: variable 'width' may be uninitialized when used here [-Wconditional-uninitialized]
+                    return set_output_area(dpy, dev, x, y, width, height);
+                                                           ^~~~~
+    xsetwacom.c:2308:49: warning: variable 'height' may be uninitialized when used here [-Wconditional-uninitialized]
+                    return set_output_area(dpy, dev, x, y, width, height);
+                                                                  ^~~~~~
+    isdv4-serial-inputattach.c:107:6: warning: variable 'attr_id' may be uninitialized when used here [-Wconditional-uninitialized]
+            if (attr_id && sscanf(attr_id, "WACf%x", &id) == 1 && id >= 0x8)
+                ^~~~~~~
+    isdv4-serial-inputattach.c:179:22: warning: variable 'baudrate' may be uninitialized when used here [-Wconditional-uninitialized]
+            set_serial_attr(fd, baudrate);
+                                ^~~~~~~~
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit bff3c3e634c962a98c0574eb790ddf78f7e2e02d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 14 11:46:07 2014 -0700
+
+    clang-warning: enumeration value 'FORMAT_DEFAULT' not explicitly handled in switch
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 14b272c48b25d8aa4ad91d18a60bccd42e6c4207
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue May 13 10:52:34 2014 -0700
+
+    clang-warning: extra ';' outside of a function
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 974a3136c5115709389fb6e57ab743240f3cec7d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 19:28:27 2014 -0700
+
+    Replace strjoinsplit
+    
+    There's not much to like about this function's implementation. The
+    few scan-build warnings specific to this particular function suggested
+    it should be put to pasture and replaced with something better.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 01a5892b46003e308791348dc291675ee3dc45dd
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 18:19:33 2014 -0700
+
+    scan-build: security: Potential insecure memory buffer bounds restriction in call 'strcat'
+    
+    The 'argv' strings passed into strjoinsplit are concatenated and
+    stored within the 'buff' array on the stack. Although we are
+    careful to ensure there is enough room remaining to store *argv
+    and a separating ' ' character before performing strcat, we also
+    need to ensure that there's room for the null terminator that
+    strcat itself will append.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit bdda78fad48bc5222468d6abff0e4858ded37713
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 17 17:42:49 2014 -0700
+
+    scan-build: Logic error: Potential unintended use of sizeof() on pointer type
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5dfdf012b324366697b724e4629b8ae1a00a4aae
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 19:03:57 2014 -0700
+
+    scan-build: Logic error: Cast region with wrong size
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 9e90e41f6ecba0a3e534b97e13b8309004ff920d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 17:57:06 2014 -0700
+
+    scan-build: Function call argument is an uninitialized value
+    
+    The isdv4ParseTouchQuery and isdv4ParseTouchData functions
+    return 0 and -1 if errors occur. At the moment, only the -1
+    case is being handled, which can result in the callers using
+    uninitialized ISDV4TouchQueryReply or ISDV4TouchData results.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 9ef69b5ba8130d5cb2315c0c2ec3c4465cf2dcdc
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Sep 15 17:08:01 2014 -0700
+
+    scan-build: Undefined or garbage value returned to caller
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 34496d7330d9bf5cfc7b5773ec464dc8a105c526
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 15:09:11 2014 -0700
+
+    scan-build: Logic error: Branch condition evaluates to a garbage value
+    
+    1 (line 88): 'attr_id' declared without an initial value
+    2 (line 96): ASSUME Loop condition is false. Execution continues on line
+    107
+    3 (line 107): Branch condition evaluates to a garbage value
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5e54ade3b24c0b4eaec8670298fd2dbd75a1c846
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 16:32:47 2014 -0700
+
+    scan-build: Logic error: Dereference of null pointer
+    
+    If no match is found within the 'while' loop, the value of 'ndevices'
+    will be -1 at the point we reach 'if (!ndevices)' since we use the
+    post-decrement operator. In addition to never producing the expected
+    error message, this also results in a NULL dereference immediately
+    afterwards.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 7a9e384f6aea427f18a87b5ef5cb711e6dcd31dd
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 15:56:56 2014 -0700
+
+    scan-build: Unix API: Undefined allocation of 0 bytes
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5f97023c197382b25c852a150caf9b8630cbf44a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 15:29:26 2014 -0700
+
+    scan-build: Logic error: Result of operation is garbage or undefined
+    
+    Assuming nitems is less than we expect, its possible for
+    get_mapped_area to return before writing values to its in-parameters.
+    This adds an additional verification to the returned data type.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit e74d825faa7269dceaf108359e5e23b716d65d3f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 15:18:29 2014 -0700
+
+    scan-build: Memory Error: Memory leak
+    
+    strjoinsplit requires the caller to free memory
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2c83a26febfe38f856ecf8aae30470b03bb61661
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 15:06:14 2014 -0700
+
+    scan-build: Unix API: Allocator sizeof operand mismatch
+    
+    Result of 'calloc' is converted to a pointer of type 'unsigned long',
+    which is incompatible with sizeof operand type 'long'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 26b518ab52813bbf8443a7cc81485ce359ab52e3
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 6 14:50:45 2014 -0700
+
+    scan-build: Dead store: Dead assignment
+    
+    Value stored to 'max' is never read
+    Value stored to 'min' is never read
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5fa70839834c35a9c2de3fae4c634a448bf583ba
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Sep 11 17:48:36 2014 -0700
+
+    wacom 0.26.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 42a42b2a8636abc9e105559e5dea467163499de7
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Sep 4 11:21:10 2014 -0700
+
+    wacom 0.25.99.2
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 7de39508b7b2b89db86e49c498df53934be5d895
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 25 16:29:15 2014 -0700
+
+    Have direct input touch use server emulation to move pointer
+    
+    The X server provides pointer emulation for the first touch on
+    direct-input (touchscreen) devices. To make use of this, we need
+    to short-circuit our internal first-touch emulation and that the
+    gesture engine immediately enters multitouch mode (but only for
+    touchscreens!)
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 48ea5fb61c4c3b1a7a4ca356e7459d5c3e65e052
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 25 16:23:45 2014 -0700
+
+    Revert "Don't emulate a mouse when multitouch is enabled"
+    
+    This reverts commit f38dd5736e2df7c3eec0338bd0c7bef8c562b979.
+
+commit 3d15f716d45cb15985a0091ce741767f81f041e6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Aug 13 09:58:34 2014 -0700
+
+    Revert "Unify wcmFingerMultitouch and wcmSendTouchEvent"
+    
+    This reverts commit 67daf21bdb7b32c27818bffaf56849a522d23477.
+
+commit beff32b64f9a63582bb05c2521cf527a7b7e40a5
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 2 12:50:02 2014 -0700
+
+    Allow touch to grab and maintain pointer control from idle puck
+    
+    This patch changes the how pointer access is arbitrated. Before,
+    any non-touch tool would be immediately granted control over the
+    pointer, preempting touch itself. This is problematic if the user
+    happens to use a device with a puck (i.e., a Cursor device) since
+    the tool is likely to be in-range but idle for a significant
+    ammount of time.
+    
+    This patch adds conditions which allow touch to grab control from
+    the puck if no events have been seen from it in a while. In addition,
+    the puck may not immediatley regain control from the touch device
+    while it is in use due to potential hardware jitter.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit c92b7a9647b33b9693522255408207d925d9bad6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 18 10:03:38 2014 -0700
+
+    wacom 0.25.99.1
+
+commit 6a9c6a221d2eba20f63d8d1ee451772a54ae5b65
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jul 7 16:43:01 2014 -0700
+
+    conf: Add new InputDevice matches based on USB and PnP ID
+    
+    If the kernel's HID driver is used rather than wacom.ko, its very
+    possible that the device will not have "Wacom" anywhere in its
+    device name. To ensure we are able to match Wacom tablets in this
+    situation, we add matches based on the known USB and PnP IDs.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 4a376ec733b44c648b00bda91b7d40a22b54ac7b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jul 7 16:41:18 2014 -0700
+
+    conf: Match Hanwang tablets in their own section
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit cd188428991781bcf20505856766bb21bcfbdd5e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Jul 15 10:26:53 2014 -0700
+
+    Add new GESTURE_CANCEL_MODE and wcmCancelGesture function
+    
+    The new GESTURE_CANCEL_MODE is used to short-circuit the gesture
+    recognition logic until all touches have been removed from the device.
+    By using the wcmCancelGesture function, any in-progress gesture will
+    be canceled and cause the driver to ignore further touch input until a
+    new gesture is started.
+    
+    This is used by the arbitration logic to ensure that touches which
+    accumulate in the valid.state list while a pen is in proximity do not
+    suddenly trigger a gesture at the moment the pen leaves prox.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit d433218f570454e2122343405039c4a7bfaa15a4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jul 14 15:18:29 2014 -0700
+
+    Support cross-device pointer arbitration
+    
+    Currently pointer arbitration is taken care of through the use of
+    a 'wcomPenInProx' variable in the WacomCommonRec. If two devices
+    share a 'common' variable, the commonDispatchDevice function will
+    ensure that touches do not move the pointer while the pen is in
+    proximity.
+    
+    This patch adds support for cross-device pointer arbitration to
+    prevent other touches known to the driver from moving the pointer.
+    This is achieved with the introduction of a 'WACOM_DRIVER' structure
+    that is shared by all tools. Inside this structure is an 'active'
+    variable that keeps track of the last tool which was actively
+    controlling the pointer. When an event from any tool comes in, the
+    driver will attempt to determine if it should be filtered or not.
+    In some cases, the new device will be allowed to take control of
+    the pointer, and become the new active device.
+    
+    Note that arbitration occurs *after* we store the device state
+    to pChannel->valid.state. The code in wcmTouchFilter.c assumes
+    that states are not missing, and can become desynchronized from
+    reality if (for example) a finger were to go out of prox without
+    a corresponding state update.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit d1c66c6b78d86fdabaf30d2fd5acf91484ca84d0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 2 11:32:50 2014 -0700
+
+    Change function signature of commonDispatchDevice
+    
+    Changes commonDispatchDevice to take an InputInfoPtr rather than a
+    WacomCommonPtr. This is in prepraration for the next patch where
+    an InputInfoPtr will be required in wcmEvent. To make this happen,
+    the call to 'findTool' is moved to wcmEvent. This also allows us
+    to remove the one-off setting of 'priv' only for touch devices.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 1b5708e04181b5734ebdfe649c87c47b5f4e28cf
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 2 11:25:21 2014 -0700
+
+    Remove unused function parameter
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 0e5c4b2635b76aa5fa5b00c2156524c2579a9b9f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Aug 4 15:12:40 2014 -0700
+
+    ISDv4 touch query timeout should be non-fatal
+    
+    Both the wacom_w8001 and isdv4.c drivers assume that a tablet /may/
+    respond to the touchquery packet with silence. This assumption does
+    not carry over to tools-shared.c, and may cause pen-only tablet PC
+    users trouble with isdv4-serial-inputattach.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Tested-by: Anshul Sirur <vixus0@gmail.com>
+
+commit c509dc3b5f09b74a50aea05abbf3a084f9e7b69f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 20 17:57:52 2014 -0700
+
+    Add support for ISDv4 0x12C tablet
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 541504ffed49e2310142ed3e72c344c0f9fc3ae6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jun 18 13:57:48 2014 -0700
+
+    Set tool device ID for generic protocol hardware
+    
+    The code in usbParseKeyEvent which is supposed to set a device
+    ID ignores the case of devices which use the generic protocol.
+    This patch changes the logic so that a device ID is assigned
+    from the BTN_* event for any non-protocol 5 device.
+    
+    Fixes: https://sourceforge.net/p/linuxwacom/bugs/246/
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit cd16d7cdc41431bf8f4ab817637381c0775a3a82
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Tue Jun 10 12:49:55 2014 -0700
+
+    Don't assume tablet (x,y) always starts from (0,0)
+    
+    Newer Cintiqs have an outbound of 200 tablet count outside of screen
+    area. This causes absinfo.minimum to be 200 for some tablets instead
+    of always 0 for all tablets. Update struct _WacomDeviceRec and
+    _WacomCommonRec to process this change.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2088de15ba662f32185c1667842afdc0394d329e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Jun 17 16:42:16 2014 -0700
+
+    wacom 0.25.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 4bc29b0d76996fe5ea7fada1160f48fa4071a1e9
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 2 09:19:13 2014 -0700
+
+    wacom 0.24.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 65bd099de3a796420ffa398f8969ca3b068747bf
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu May 29 17:06:30 2014 -0700
+
+    Send proper Y coordinate when leaving proximity
+    
+    Bug introduced in commit e4bfe1d.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 26cc50112cfe98d81ca4c38fd7bdff5ef08a8178
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 28 16:47:48 2014 -0700
+
+    Use OUTPROX_STATE in wcmSoftOutEvent and elsewhere
+    
+    Missed in commit 61f6a7c.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 36c757c92981cc1a70e258f3913d991023f1a445
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu May 22 18:11:12 2014 -0700
+
+    Fix enter-prox detection
+    
+    Prior to commit 61f6a7c, the value of oldState.proximity
+    was not set by wcmUpdateOldState. Rather, when a tool
+    entered proximity, the proximity flag would be explicitly
+    set only after the call to wcmSend(Non)PadEvents was
+    complete. This ensured that the condition where the pen
+    has just entered prox would be properly detected.
+    
+    Since the aforementioned commit copies the value of ds
+    (whose proximity flag is set) to oldState, issues related
+    to the enter-prox condition have appeared. This is most
+    noticable in GIMP, which has trouble switching tools.
+    
+    To resolve this issue, we remove the explicit setting of
+    oldState.proximity (which is now implicitly handled by
+    the call to wcmUpdateOldState after wcmSend(Non)PadEvents
+    finishes) and add in an explicit clearing of the same
+    prior to the call. In this way, it acts the same as
+    oldState.buttons which must also be cleared upon entering
+    prox to properly detect presses.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 44a290ea54cffad37472e290a09e0f01e04d2cd4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri May 9 10:42:35 2014 -0700
+
+    Always clear free channel contents before reuse
+    
+    The patchset beginning at 840e658 unifies our device ID handling, having
+    a single function be responsible for detecting and setting the type.
+    The new code is very conservative about setting ds->device_type and will
+    only do so if otherwise unset. Because only protocol 5 clears the channel
+    contents (including device_type) prior to re-use, other tablets encounter
+    problems when switching between tools.
+    
+    This patch has usbChooseChannel always clear the contents of a channel
+    prior to its reuse. Our prior exception for only protocol 5 devices was
+    just plain sloppy.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit cf708a474a5aa553b193bcd6da38272b62c774dc
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 7 14:33:25 2014 -0700
+
+    Add support for four new ISDv4 sensors
+    
+    Adds support for the 0x116, 0x4004, 0x5000, and 0x5002 ISDv4 sensors.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit df4e30d480f4877474d82c39697f5d96db4d2b28
+Author: Jacob Nevins <0jacobnk.git@chiark.greenend.org.uk>
+Date:   Wed May 7 17:03:56 2014 -0700
+
+    Remove vestiges of "displaytoggle" action mapping
+    
+    This was removed from the driver in 2010 (910dc637). Stop claiming to
+    support it in xsetwacom(1), etc.
+    
+    Source: http://sourceforge.net/p/linuxwacom/bugs/236/
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e9bed4fb52770b7587530303d456885e362b4073
+Author: Jacob Nevins <0jacobnk.git@chiark.greenend.org.uk>
+Date:   Wed May 7 16:57:18 2014 -0700
+
+    Improve button action mapping documentation
+    
+    Source: http://sourceforge.net/p/linuxwacom/patches/88/
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 61f6a7c5203a87dc5c53e29bf216318aa3e8e43a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Feb 20 09:28:32 2014 -0800
+
+    Update values of oldState by simple assignment
+    
+    When updating the value of oldState, it is sufficient to simply
+    use an assignment statement for the entire struct rather than
+    explicitly setting each field. A static const "out of prox"
+    state is created to define the default out-of-prox values.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit e4bfe1d7765fdd295c2e7df6f3725fdbe4fc56fd
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Feb 20 09:27:15 2014 -0800
+
+    Replace multitude of "old state" vars with a _WacomDeviceState
+    
+    Reducing clutter.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit ac6ad1d7e0a7c428ce609c3bda33099758cf7fde
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Feb 20 09:23:26 2014 -0800
+
+    Remove unnecesary device variables: current[XY]
+    
+    These variables are currently used only within wcmUpdateOldState
+    and can be passed in as arguments rather than held as variables
+    in the device struct.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 1a21aacf90bcc9b56536f449e5b146ad9bf5f4c6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 10 11:10:49 2014 -0700
+
+    Do not store a second copy of old touchstrip values in oldTilt[XY]
+    
+    The touchstrip values are already stored in oldStrip[XY], and appear to
+    also be stored in oldTilt[XY] as a quirk of history. The value of oldTilt[XY]
+    itself is only read in wcmSendNonPadEvents (which is not called for the pad
+    device for obvious reasons ;)). At this point in time, there is absolutely
+    no reason to store a second copy of the strip values in oldTilt[XY].
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 34ca9ab25d682335021097713650782e82f6dc73
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 10 15:24:15 2014 -0700
+
+    Update configure help to indicate that debugging is enabled by default
+    
+    Running `./configure --help` indicates that debugging is disabled
+    by default, but this is not the case. Change the documentation to
+    state that it is enabled, and show the "--disable-debugging" option
+    to make it clear.
+
+commit becbee2f2b94b969f0bc2172a44c7bfe0804774e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 10 10:22:34 2014 -0700
+
+    doc: Remove deprecated Doxygen options
+    
+    All options were at their default values, so safe to remove.
+
+commit 41cb1c2fb4343781ee78ea79b5cea87be0999546
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Mar 17 14:59:44 2014 -0700
+
+    xsetwacom: Replace XKeycodeToKeysym with XkbKeycodeToKeysym
+    
+    We're already using the Xkb functions anyway, so we may as well use
+    XkbKeycodeToKeysym and silence the XKeycodeToKeysym deprecation warning.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 36fd31adec1864a70d159a9853b2231c82179179
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 10 16:33:45 2014 -0700
+
+    Remove dead code: ERASER_PROX, OTHER_PROX
+
+commit b4703f8c639b62ccd65784122cd487606ee20e30
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 10 16:27:54 2014 -0700
+
+    Remove dead code: struct _PROPINFO
+
+commit 96eae07f60b0575a71f254b2f14b7bc168ab6e9c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 10 15:29:34 2014 -0700
+
+    Remove dead code: factor[XY]
+    
+    The factor[XY] variables were introduced to make relative devices behave
+    more naturally by taking into account the differences between screen
+    space and device space. In particular, these variables were used to
+    provide uniform acceleration along the X and Y axes, along with
+    suppressing events that moved the cursor less than one pixel.
+    
+    For these variables to be properly calculated, the driver needs to
+    be aware of the screen resolution. The necessary code has been removed
+    for quite some time now, making this code entirely vestigal. The server
+    itself should take care of everything for us as of ABI_XINPUT_VERSION
+    19.2, accounting for both the resolution of the device and screen
+    when deciding where the pointer should appear.
+    
+    NOTE: Strictly speaking factor[XY] aren't /entirely/ dead. There is *one*
+    case where they are still set to a value other than 1.0 (setting either
+    TopX or TopY in xorg.conf). However, this side-effect is not at all
+    what is intended/expected so the functionality is still safe to remove.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 16d9b574901963971c6ef0b6be9b649c81a70c04
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Apr 15 14:22:30 2014 -0700
+
+    xsetwacom: Fix off-by-one error in list_one_device
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 89547bf9e01c9feb33947532c3ca3c4ba9a88a02
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Feb 25 17:51:10 2014 -0800
+
+    Remove dead code: [xy]_padding
+    
+    The values of wcmVirtualTabletPadding are only read at a single
+    location. Immediately prior to this read, they are set to zero.
+    Because a value of zero will have no effect when used, the
+    [xy]_padding variables are nothing more than dead code.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Ping Cheng <pingc@wacom.com>
+
+commit edeb94a0ceaab2695f792c12b1473289b4000d8d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Feb 25 17:50:50 2014 -0800
+
+    Remove dead code: Header defines and prototypes
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Ping Cheng <pingc@wacom.com>
+
+commit 7b5c97aa9b3bd8a694775cce81297dd641f2f067
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Feb 20 10:02:38 2014 -0800
+
+    Remove dead code: WacomToolArea
+    
+    Functionality removed back in 2001 with commit 82e65fc
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Ping Cheng <pingc@wacom.com>
+
+commit fe17462457a23fa177aeb772b8c934c681fc6aea
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Feb 19 17:15:37 2014 -0800
+
+    Remove dead code: misc. _WacomDeviceRec variables
+    
+    The use of each of these variables was eradicated around the turn
+    of 2010 (commits d7dcb7d, 57fdd26, and f934866).
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Ping Cheng <pingc@wacom.com>
+
+commit 3eacea1058ef255e01ba83d0297bf0e5c533879b
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Apr 9 21:27:05 2014 +0200
+
+    Attempt to derive the tool type from a known button/key event
+    
+    This is the last bit of clean up and consolidation in tool type detection:
+    usbParseAbsEvent() sets the tool type if it recognized a button or key
+    event and the tool type has not been set before.
+    Before we get to usbParseAbsEvent() channel mapping must have failed most
+    certainly so we must have gotten a new channel for each button or key
+    sequence.
+    Since this seems to be a last resort attempt to determine the tool type
+    we only do this when all other methods have failed before. The newly
+    introduced function deriveDeviceTypeFromButtonEvent() mimics the behavior
+    of usbParseAbsEvent().
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 261ca70cfdc17c1e927b80190d127226798172c0
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Apr 9 21:27:04 2014 +0200
+
+    Remove duplicate tool type detection
+    
+    Tool type detection is done in two places: early in usbDispatchEvents()
+    by calling usbInitToolType() and later on in the same function when the
+    events are parsed.
+    usbInitToolType() is used to set (wcmUSBData*)->wcmDeviceType, the
+    detection that happens later when the events are parsed sets
+    (WacomDeviceState).device_type. These variables are matched against each
+    to find the right channel for a device.
+    If the algorithms used for both set of tool type detection diverge
+    undesirable effects may happen. Therefore it is advisable to determine the
+    tool type only once ie. in usbInitToolType() and copy the result to
+    (WacomDeviceState).device_type if this value is unset.
+    
+    * Bring the algorithm in usbInitToolType() in sync with the reset:
+    
+      Add missing key codes to deviceTypeFromEvent()
+    
+      - Add BTN_TOOL_DOUBLETAP and BTN_TOOL_TRIPLETAP, return
+        TOUCH_ID for them.
+    
+      - Return TOUCH_ID on BTN_TOUCH when protocol level is
+        WCM_PROTOCOL_GENERIC and tool is a 1 finger USB touch.
+    
+    * Delete any duplicate tool type setting
+    
+    * Add a test for debugging if the device type has changed while in proximity.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8f44f3568c46ab9cca543b830fb2e84dd56a2af9
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Apr 9 21:27:03 2014 +0200
+
+    Store the last used channel rather than blindly taking channel 0
+    
+    When an event stream from a device doesn't contain information
+    on the device type we look at the last used channel and copy
+    over the device type.
+    This is acceptable as such a situation only occurs while in
+    proximity i.e. when the previous command package came from
+    the same device.
+    So far the device type form the state in channel 0 was taken.
+    This was wrong however for PAD devices for instance.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e08c45f3caf371a8e4123119aeb0b0d7fc227cca
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Apr 9 21:27:02 2014 +0200
+
+    Fix initial device type detection
+    
+    usbInitToolType() tries to find the device type of a tool.
+    Unlike usbFindDeviceType() it doesn't take into account the device_id
+    which may exist in the event stream.
+    As a result the device type may be taken from the last known type.
+    This is generally a bad idea if the type has changed.
+    This will happen for example when pressing a key on the Cintiq 21UX menu
+    strips after removing a pen from the tablet.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 533220d3f2369b80afc404df1e5bb6a024309616
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Apr 9 21:27:01 2014 +0200
+
+    Zero is not a valid device ID, don't derive a type from it
+    
+    A protocol 5 tool will send an ABS event code=ABS_MISC with
+    value 0. 0 is however not a valid device ID. Don't try to
+    derive a type from it.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 840e6585ab273828d6bcf1f0d0f4293f4ddb631a
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Apr 9 21:27:00 2014 +0200
+
+    Remove unused code
+    
+    usbFindDeviceType() is only called once. From where it
+    is called, it is only called if event->value != 0 and
+    with ds->device_id = event->value.
+    Thus the test !ds->device_id will always fail.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 45ebd5c5eb379bd9b04ed585d1406e3f9b6bc16b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Apr 3 15:31:09 2014 -0700
+
+    wacom 0.24.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e30b3789ca82d058dd10caca8a7e825154fd0e7f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Mar 19 15:44:06 2014 -0700
+
+    wacom 0.23.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit c1de391dcda0c151ba347652cab3c96705c44b61
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Mar 19 15:36:45 2014 -0700
+
+    test: Update number of xsetwacom parameters
+    
+    Missed in bae16b0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 10cc765549ed152d9f2dd82da5c33e9e9df5d30b
+Author: Egbert Eich <eich@suse.com>
+Date:   Tue Mar 11 15:19:14 2014 +0100
+
+    Add an option to disable pressure recalibration
+    
+    If the initial pressure of a device is != 0 the driver recalibrates
+    the pressure range. This is to account for worn out devices.
+    The downside is that when the user hits the tablet very hard the
+    initial pressure reading may be unequal to zero even for a perfectly
+    good pen. If the consecutive pressure readings are not higher than
+    the initial pressure by a threshold no button event will be generated.
+    This option allows to disable the recalibration.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 9765439856149570be41d1e2f2492e620822d492
+Author: Egbert Eich <eich@suse.com>
+Date:   Mon Mar 17 21:08:40 2014 +0100
+
+    Attempt to not lose events to pressure recalibration
+    
+    Worn out devices send a non-zero pressure even when not in contact
+    with the tablet. To compensate for this the driver detects if the
+    pressure sent by the device immediately after indicating proximity
+    is non-zero. It subtracts this value from any pressure value sent
+    later and rescales the pressure range to the full device range.
+    If it later on sees the pressure value fall below this initial value
+    it will readjust it this lower value.
+    The downside of this is that when the pen is pushed onto the tablet
+    really fast the initial pressure reading may be non-zero also the
+    pen isn't worn. This can lead to lost events.
+    This patch tries to address this:
+    If the first pressure reading is != 0 it is recorded. If the recorded
+    maximum value is >0 but a later pressure reading is higher the maximum
+    value is replaced. If no button press event is generated the 'normal'
+    way it is checked of the recorded maximum would trigger one when
+    minPressure decreases.
+    Once a 'normal' button event is generated or an 'alternative' button
+    event is generated and minPressure doesn't decrease any more the
+    recorded maximum is set to 0 which will disable the checks until the
+    next prox in.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 62f912422bc428d2c7f2df71b164a956e895f29d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Feb 21 15:31:15 2014 -0800
+
+    Support hardware touch switch
+    
+    New Intuos series introduced a hardware switch to turn touch
+    events on/off. This patch retrieves its state from kernel by
+    checking if SW_MUTE_DEVICE is declared.
+    
+    A new input property, WACOM_PROP_HARDWARE_TOUCH, is intoduced
+    to report touch status changed by end user through touch switch.
+    
+    HardwareTouch, a new xsetwacom option, is added. This option
+    is read-only since the state can only be changed by end users.
+    This option is independent from the existing Touch option,
+    which can be considered as a software touch switch.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 8bb519ef2b8428459c31139779cce44dbbc1cd0a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Feb 21 17:12:56 2014 -0800
+
+    Update wcmTouchDevice for touch interface
+    
+    To support arbitration, we only needed to access touch pointer
+    from pen interfaces. Now, we need to access touch pointer from
+    touch interfaces to update touch switch state.
+    
+    Since other tools, such as PAD, can be associated with touch
+    interfaces, we can not assume the first tool created on touch
+    interface is a touch tool. Assign it to wcmTouchDevice to avoid
+    looping through the tool list everytime when we need to access it.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit c21f87c403c4a1d2dc9c0d990d9892482d4ffe26
+Author: Ping Cheng <pingc@wacom.com>
+Date:   Mon Feb 3 10:34:17 2014 -0800
+
+    Improve wcmLinkTouchAndPen device matching
+    
+    If a tablet has pen and touch interfaces, they appear to the system as
+    seperate devices. Because it is necessary for these devices to share
+    information, `wcmLinkTouchAndPen` was introduced to connect the two
+    "halves" of the single physical tablet together (similar to
+    how `wcmMatchDevice` links logical devices together).
+    
+    `wcmLinkTouchAndPen` has a few bugs in its implementation which prevent
+    it from doing its job as well as it should. This patch introduces a new
+    funcation named `wcmIsSiblingDevice` which is responsible for
+    determining if two devices are part of the same tablet. It includes a
+    slightly stricter (but still imperfect) check to reduce the number of
+    false-positives in the linking process.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit ec64bcf9fe6d4ac5f8b7c56a7e001ad63c31060b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Mar 19 15:36:51 2014 -0700
+
+    test: Use X11_LIBS when building xsetwacom_test
+    
+    Missed in c49463f.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 3deb7c7a3b001f1178cfb339efc5e3d6d8de181a
+Merge: 084ee1f c49463f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Mar 20 08:23:56 2014 +1000
+
+    Merge branch 'wacom-inputattach'
+
+commit 084ee1f41a948db43204e1794cdf19d3a0bd7c41
+Author: Hans de Goede <hdegoede@redhat.com>
+Date:   Wed Mar 12 16:12:05 2014 +0100
+
+    Add server managed fd handling
+    
+    This mostly consists of skipping common fd handling when server managed fds
+    are in used, the rest is handled by xf86OpenSerial and our wcmClose
+    xf86CloseSerial wrapper.
+    
+    Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 52fe01c0a728f58f8920358a6de4c3efe1dd354b
+Author: Hans de Goede <hdegoede@redhat.com>
+Date:   Wed Mar 12 16:12:04 2014 +0100
+
+    Add a wcmClose helper function
+    
+    This is a preparation patch for adding server managed fds support.
+    
+    Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit cf3c7c763fdef96f2c82a0e891693a086f324d96
+Author: Hans de Goede <hdegoede@redhat.com>
+Date:   Wed Mar 12 16:12:03 2014 +0100
+
+    wcmUSB: Don't directly dereference common->fd
+    
+    common->fd is intended to share the fd between different InputInfo structs,
+    and that is the only thing it should be used for. With server managed fds,
+    the fd management will all be done by the server and common->fd will never
+    get set, so nothing outside of wcmDevOpen / wcmDevClose should use it.
+    
+    Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit c49463f7caa50c18817ca16221d07c4fd8c4816e
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Mar 20 07:34:48 2014 +1000
+
+    tools: split the CFLAGS into binary-specific ones
+    
+    Also, xsetwacom only needs the library, not the server.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 24c660a8ed16c04ed938355c9c2009af476d7638
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 19 07:55:38 2014 +1000
+
+    conf: ship a udev rule and a systemd service file for inputattach
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 47c983478ab1094c02a5b3251cf5564153730645
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 18 10:49:22 2014 +1000
+
+    tools: add an inputattach-like tool
+    
+    Does more or less the same thing as inputattach, but tries to be a bit smarter
+    about the baud rate depending on the tablet model. And re-tries if the baud
+    rate is wrong.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit bc479f8804762987403d8fc2a65dfaf5fbee342d
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 18 10:58:20 2014 +1000
+
+    tools: add colon after TOUCH output
+    
+    For consistency with the TABLET output.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit a36367b684a8f0a478706610a54a71383bee7aa3
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 18 10:56:57 2014 +1000
+
+    tools: re-enable wait-for-tablet
+    
+    We need this to actually time out, otherwise we can't tell whether we have the
+    wrong baud rate set. That's fine for a debugger where a human will terminate,
+    but not for the upcoming inputattach clone.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit a8c9bd963b3cb3b0573ea73588d3e313a7e4f693
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 18 10:31:15 2014 +1000
+
+    tools: split out the debugger into the actual debugger and shared code
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e8cd8e1923a7b8fa02aa4700ec7062f6fd468f7a
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 18 10:27:53 2014 +1000
+
+    tools: localise the remaining global variables
+    
+    Only one left is verbosity now.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 65189408beb9447b3166a7e1a5d4f30c347c7218
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 17 09:38:45 2014 +1000
+
+    tools: drop double-call to tcsetattr
+    
+    We merely modify the flags, might as well just send one call
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 92a0b59588607dfa0ed18b40a0e0dc2dbb56572f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 17 08:58:46 2014 +1000
+
+    tools: use perror instead of fprintf
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 85e6c88e43ff6e47c967117173cbf0d304dada6f
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 17 08:00:45 2014 +1000
+
+    tools: open serial devices with O_NOCTTY
+    
+    Probably doesn't make much difference, but won't hurt if we ever send the
+    wrong path name.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 49e2b80829ab830aee272035fb390ee581849a0c
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 17 09:46:21 2014 +1000
+
+    tools: rearrange serial settings
+    
+    If the device was't properly closed/reset after a crash, tcgetattr() will
+    fail. Ignore that error and apply the settings we want nonetheless, in most
+    cases the device will just come back normally.
+    
+    And to do so, merge setting the baud rate together with the rest so we only
+    have one call. Otherwise we can't apply the baud rate settings without
+    potentially submitting garbage to the driver.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 4f0f0e3510ac9afc671ac0dc2cf23e5ab7d5fb70
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 18 10:20:53 2014 +1000
+
+    isdv4: inline all isdv4 parsing functions
+    
+    Stops compiler warning if any of them aren't used.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 51772cdb89db307a9751e0c14f407f49fe49cd4d
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Mar 18 09:45:04 2014 +1000
+
+    Add includes to isdv4.h
+    
+    The header should include what it needs, not rely on other files to include
+    the required bits.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit f80f0b3cfa8c7e955993a2daf4192b04997ece3a
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 17 08:52:33 2014 +1000
+
+    configure: both clients and drivers need the protocol headers
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 3d7a6eb533cfbad4aafa018ece9af2e1b488a798
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Feb 19 15:23:40 2014 +0100
+
+    Free (WacomToolPtr)->name when freeing the tool list
+    
+    Currently the name member is set in wcmParseSerials() only, however
+    it is dynamically allocated. thus free it when destroying the structure
+    which contains it.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 93d232ac0140251b9b3ee4fe6e11ee65553f8284
+Author: Egbert Eich <eich@suse.com>
+Date:   Fri Feb 7 20:24:39 2014 +0100
+
+    Log when the pen device appears to be too worn out
+    
+    Worn out pens have an initial pressure != 0. If this pressure
+    persists while the pen is in proximity and still exists when
+    going out of proximity, warn about worn out tool.
+    Some devices seem to send a zero pressure when going out of
+    proximity. Thus we record the last pressure when still in
+    proximity.
+    Also we count the number of events we have received while in
+    proximity so the risk of false reports on 'quick taps' is lower.
+    
+    This condition may also occur intermittently on abusive operation.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 77a7ac02107a00934c98b1955a17a2f5c0614bcf
+Author: Egbert Eich <eich@suse.com>
+Date:   Fri Feb 7 20:42:22 2014 +0100
+
+    Add more detailed messaging in code that handles abnormal situations
+    
+    Log which serial numbers have been force-proxied out.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 591474f9fac0e06c48abed4edfda22edb3e36cf9
+Author: Egbert Eich <eich@suse.com>
+Date:   Tue Feb 11 12:54:04 2014 +0100
+
+    Avoid 'division by zero' in xf86ScaleAxis()
+    
+    If minPressure == wcmMaxZ then the range left to scale is 0. Catch
+    this condition and act appropriately.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 7e56966e917d9389965910c9d28f4047d51d4349
+Author: Egbert Eich <eich@suse.com>
+Date:   Fri Feb 7 19:36:28 2014 +0100
+
+    Remove test if pressure falls below the minPressure
+    
+    This code is entirely irrelevant as it is called immediately after
+    rebasePressure() which already ensures that minPressure is the
+    minimum of minPressure and current pressure unless one mistrusts
+    the implementation of min().
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 6fc13b20dc1178c6417c658a1bd6a110fd507244
+Author: Egbert Eich <eich@suse.com>
+Date:   Thu Feb 13 14:01:04 2014 +0100
+
+    Get rid of spurious 'format not a string literal' warnings
+    
+    With '-Wformat-nonliteral' gcc kindly warns us that it cannot check the
+    arguments of a scanf statement as the format string is not literal.
+    This happens if the format string itself is pointer.
+    Since the list of format strings only has two elements the same thing
+    can be achieved in code directly.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit b5cdd510f990ea49e141109712cab34a32d14f4d
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Feb 12 13:04:22 2014 +0100
+
+    Fix spurious '-Wshadow' warning
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5706862f571da1d182ff0b17a697cbd1779d3be3
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Feb 12 13:22:38 2014 +0100
+
+    Fix '-Wuninitialized' warnings
+    
+    Pinning variables to some value to fix warning about uninitialized
+    variable.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 96c9beedecccb1dbdd2a24294d25ed796639fd02
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Feb 12 18:27:43 2014 +0100
+
+    Fix warning about discarding 'const' qualifier
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit e72f0c2146d3b84083561961c3eedc3ca003dca6
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Feb 12 17:42:25 2014 +0100
+
+    Make tested static functions non-static for test suite
+    
+    This gets rid of the hack which redefines 'static' to make
+    every static function in the driver non-static for the test
+    suite.
+    Instead we use a macro instead of 'static' in the function definition
+    of each function used in the test suite which we can set to empty
+    when compiling the test suite.
+    At the same time we create a declaration for each of those functions
+    which gets us rind of about a bazillion compiler warnings.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit f18e31da214fc4ef625c398429a07063032edfe0
+Author: Egbert Eich <eich@suse.com>
+Date:   Fri Feb 14 00:16:58 2014 +0100
+
+    Add missing symbol xf86PrintChipsets() for test suite
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 710ec7a47d90778bd419c75f5bc9b391664f6670
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Feb 12 09:03:27 2014 +0100
+
+    Fix loads of 'redundand declaration' warnings in test suite
+    
+    Most symbols in fake-symbols.h were already declared in the
+    Xserver header files from the SDK which are also included.
+    These produce loads of compiler warnings.
+    The few remaining ones can be added by including xf86_OSproc.h
+    and exevents.h.
+    Then then all function declarations for the stub functions
+    can be deleted.
+    Relying on SDK provided headers makes providing stub functions
+    cumbersome due to frequent non-atomic API/ABI changes.
+    To work around this one would have to avoid SDK headers completely,
+    though.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 1c163bd2ef9689897fab728ede96b6baafc0d597
+Author: Egbert Eich <eich@suse.com>
+Date:   Wed Feb 12 08:53:12 2014 +0100
+
+    Fix type mismatch in test suite
+    
+    Add CONST which expands to either 'const' or nothing depending
+    on ABI version.
+    This eliminates a compiler error.
+    
+    Signed-off-by: Egbert Eich <eich@suse.com>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2e125f4f2993220652b375c1f934516ed0b79c67
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Oct 10 09:55:32 2013 -0700
+
+    Have Lenovo "ISD-V4" (0x6004) sensor use wacom driver
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=66891
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 06585fc2131379a70b67a4cb3a8d48d55bc2c9b3
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Jan 20 11:13:11 2014 +1000
+
+    conf: add N-Trig DuoSense to our matched devices
+    
+    That device has a pen and an eraser tool, as well as a touch device. Handle it
+    with the wacom driver by default, the evdev driver isn't quite up to scratch
+    here.
+    
+    This also fixes a missing match in the .fdi file for the base N-Trig devices -
+    just in case.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit e6aea4a61a5e5d464bf5419abfbc26c909d87dc9
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Nov 1 14:48:05 2013 +1000
+
+    Check return value of EVIOCGPROP ioctl
+    
+    Doesn't change anything functionally since prop is 0 anyway but this static
+    analyzers shut up.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pingc@wacom.com>
+
+commit 2bd942fa6dcaf02c1b825878c3d89badd9319a7f
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Oct 10 16:14:29 2013 -0700
+
+    Decide WCM_LCD by kernel property
+    
+    kernel 2.6.38 introduced INPUT_PROP_DIRECT to indicate a device is
+    a direct touch (onscreen pointer) device. Use it so we do not
+    have to add individual devcies for that feature.
+    
+    When INPUT_PROP_DIRECT was added, INPUT_PROP_MAX and EVIOCGPROP were
+    also defined. So, we only need to make sure INPUT_PROP_DIRECT is defined.
+    
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit b154cfa766ce9497379a5cfa38fff64e7d89440b
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Oct 10 16:13:55 2013 -0700
+
+    Fix missing pad/expresskey events issue
+    
+    Setting PAD_ID should not be limited to just tablets that use
+    generic BTN_* events. Also, on touch enabled devices, we miss
+    pad events when touch events are filtered/disabled. Walk through
+    all channels to make sure all channels that have changed values
+    are processed.
+    
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 139aa56e3bb6025826413335f0f7e29d768baeb4
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Oct 10 16:11:47 2013 -0700
+
+    Threshold applies to pen tools only
+    
+    This patch also removes redundant device name in X_PROBED messages.
+    
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Ping Cheng <pingc@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
 commit 5395d18c4bbaa0d9ea96617ad41bd94848fb05e9
 Author: Jason Gerecke <killertofu@gmail.com>
 Date:   Fri Sep 27 16:42:39 2013 -0700

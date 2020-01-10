@@ -17,7 +17,6 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#define WACOM_TOOLS
 #include "config.h"
 #endif
 
@@ -43,6 +42,9 @@
 
 #define TRACE(...) \
 	if (verbose) fprintf(stderr, "... " __VA_ARGS__)
+
+#define safe_realloc(p, n, s) \
+	((size_t)-1 / (n) < (s) ? NULL : realloc((p), (n)*(s)))
 
 static int verbose = False;
 
@@ -84,6 +86,7 @@ enum prop_flags {
 typedef struct _param
 {
 	const char *name;	/* param name as specified by the user */
+	const char *x11name;    /* param name used in xorg.conf */
 	const char *desc;	/* description */
 	const char *prop_name;	/* property name */
 	const int prop_format;	/* property format */
@@ -118,6 +121,7 @@ static param_t parameters[] =
 {
 	{
 		.name = "Area",
+		.x11name = "Area",
 		.desc = "Valid tablet area in device coordinates. ",
 		.prop_name = WACOM_PROP_TABLET_AREA,
 		.prop_format = 32,
@@ -134,6 +138,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "ToolDebugLevel",
+		.x11name = "DebugLevel",
 		.desc = "Level of debugging trace for individual tools "
 		"(default is 0 [off]). ",
 		.prop_name = WACOM_PROP_DEBUGLEVELS,
@@ -143,6 +148,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "TabletDebugLevel",
+		.x11name = "CommonDBG",
 		.desc = "Level of debugging statements applied to shared "
 		"code paths between all tools "
 		"associated with the same tablet (default is 0 [off]). ",
@@ -153,6 +159,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "Suppress",
+		.x11name = "Suppress",
 		.desc = "Number of points trimmed (default is 2). ",
 		.prop_name = WACOM_PROP_SAMPLE,
 		.prop_format = 32,
@@ -161,6 +168,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "RawSample",
+		.x11name = "RawSample",
 		.desc = "Number of raw data used to filter the points "
 		"(default is 4). ",
 		.prop_name = WACOM_PROP_SAMPLE,
@@ -170,6 +178,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "PressureCurve",
+		.x11name = "PressCurve",
 		.desc = "Bezier curve for pressure (default is 0 0 100 100 [linear]). ",
 		.prop_name = WACOM_PROP_PRESSURECURVE,
 		.prop_format = 32,
@@ -178,6 +187,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "Mode",
+		.x11name = "Mode",
 		.desc = "Switches cursor movement mode (default is absolute). ",
 		.arg_count = 1,
 		.set_func = set_mode,
@@ -185,6 +195,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "TabletPCButton",
+		.x11name = "TPCButton",
 		.desc = "Turns on/off Tablet PC buttons "
 		"(default is off for regular tablets, "
 		"on for Tablet PC). ",
@@ -196,6 +207,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "Touch",
+		.x11name = "Touch",
 		.desc = "Turns on/off Touch events (default is on). ",
 		.prop_name = WACOM_PROP_TOUCH,
 		.prop_format = 8,
@@ -204,7 +216,17 @@ static param_t parameters[] =
 		.prop_flags = PROP_FLAG_BOOLEAN
 	},
 	{
+		.name = "HWTouchSwitchState",
+		.desc = "Touch events turned on/off by hardware switch. ",
+		.prop_name = WACOM_PROP_HARDWARE_TOUCH,
+		.prop_format = 8,
+		.prop_offset = 0,
+		.arg_count = 1,
+		.prop_flags = PROP_FLAG_READONLY | PROP_FLAG_BOOLEAN
+	},
+	{
 		.name = "Gesture",
+		.x11name = "Gesture",
 		.desc = "Turns on/off multi-touch gesture events "
 		"(default is on). ",
 		.prop_name = WACOM_PROP_ENABLE_GESTURE,
@@ -215,6 +237,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "ZoomDistance",
+		.x11name = "ZoomDistance",
 		.desc = "Minimum distance for a zoom gesture "
 		"(default is 50). ",
 		.prop_name = WACOM_PROP_GESTURE_PARAMETERS,
@@ -224,6 +247,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "ScrollDistance",
+		.x11name = "ScrollDistance",
 		.desc = "Minimum motion before sending a scroll gesture "
 		"(default is 20). ",
 		.prop_name = WACOM_PROP_GESTURE_PARAMETERS,
@@ -233,6 +257,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "TapTime",
+		.x11name = "TapTime",
 		.desc = "Minimum time between taps for a right click "
 		"(default is 250). ",
 		.prop_name = WACOM_PROP_GESTURE_PARAMETERS,
@@ -242,6 +267,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "CursorProximity",
+		.x11name = "CursorProx",
 		.desc = "Sets cursor distance for proximity-out "
 		"in distance from the tablet "
 		"(default is 10 for Intuos series, "
@@ -253,6 +279,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "Rotate",
+		.x11name = "Rotate",
 		.desc = "Sets the rotation of the tablet. "
 		"Values = none, cw, ccw, half (default is none). ",
 		.prop_name = WACOM_PROP_ROTATION,
@@ -362,6 +389,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "Threshold",
+		.x11name = "Threshold",
 		.desc = "Sets tip/eraser pressure threshold "
 		"(default is 27). ",
 		.prop_name = WACOM_PROP_PRESSURE_THRESHOLD,
@@ -417,6 +445,7 @@ static param_t parameters[] =
 	},
 	{
 		.name = "BindToSerial",
+		.x11name = "Serial",
 		.desc = "Binds this device to the serial number.",
 		.prop_name = WACOM_PROP_SERIAL_BIND,
 		.prop_format = 32,
@@ -433,6 +462,16 @@ static param_t parameters[] =
 		.prop_flags = PROP_FLAG_READONLY
 	},
 	{
+		.name = "PressureRecalibration",
+		.x11name = "PressureRecalibration",
+		.desc = "Turns on/off Tablet pressure recalibration",
+		.prop_name = WACOM_PROP_PRESSURE_RECAL,
+		.prop_format = 8,
+		.prop_offset = 0,
+		.arg_count = 1,
+		.prop_flags = PROP_FLAG_BOOLEAN
+	},
+	{
 		.name = "MapToOutput",
 		.desc = "Map the device to the given output. ",
 		.set_func = set_output,
@@ -445,13 +484,13 @@ static param_t parameters[] =
 		.get_func = get_all,
 		.prop_flags = PROP_FLAG_READONLY,
 	},
-	{ NULL }
+	{}
 };
 
 /**
  * Deprecated parameters and their respective replacements.
  */
-struct deprecated
+static struct deprecated
 {
 	const char *name;
 	const char *replacement;
@@ -499,11 +538,11 @@ is_deprecated_parameter(const char *name)
 
 	if (is_deprecated)
 	{
-		printf("Parameter '%s' is no longer in use. ", name);
+		fprintf(stderr, "Parameter '%s' is no longer in use. ", name);
 		if (d->replacement != NULL)
-			printf("It was replaced with '%s'.\n", d->replacement);
+			fprintf(stderr, "It was replaced with '%s'.\n", d->replacement);
 		else
-			printf("Its use has been deprecated.\n");
+			fprintf(stderr, "Its use has been deprecated.\n");
 	}
 
 	return is_deprecated;
@@ -511,8 +550,8 @@ is_deprecated_parameter(const char *name)
 }
 
 struct modifier {
-	char *name;
-	char *converted;
+	const char *name;
+	const char *converted;
 };
 
 static struct modifier modifiers[] = {
@@ -573,6 +612,8 @@ static struct modifier specialkeys[] = {
 	{"del", "Delete"}, {"home", "Home"},
 	{"end", "End"},
 
+	{"insert", "Insert"},
+
 	{"`", "quoteleft"},
 	{"-", "minus"},
 	{"=", "equal"},
@@ -620,6 +661,7 @@ static param_t* find_parameter(char *name)
 	return param->name ? param : NULL;
 }
 
+static void print_value(param_t *param, const char *msg, ...) __attribute__((format(printf, 2, 3)));
 static void print_value(param_t *param, const char *msg, ...)
 {
 	va_list va_args;
@@ -627,16 +669,53 @@ static void print_value(param_t *param, const char *msg, ...)
 	switch(param->printformat)
 	{
 		case FORMAT_XORG_CONF:
-			printf("Option \"%s\" \"", param->name);
+			if (param->prop_flags & PROP_FLAG_READONLY)
+				break;
+			if (!param->x11name)
+				break;
+			printf("Option \"%s\" \"", param->x11name);
 			vprintf(msg, va_args);
 			printf("\"\n");
 			break;
 		case FORMAT_SHELL:
+			if (param->prop_flags & PROP_FLAG_READONLY)
+				break;
 			printf("xsetwacom set \"%s\" \"%s\" \"",
 					param->device_name, param->name);
 			vprintf(msg, va_args);
 			printf("\"\n");
 			break;
+		case FORMAT_DEFAULT:
+		default:
+			vprintf(msg, va_args);
+			printf("\n");
+			break;
+	}
+
+	va_end(va_args);
+}
+
+static void print_button_value(param_t *param, int n, const char *msg, ...) __attribute__((format(printf, 3, 4)));
+static void print_button_value(param_t *param, int n, const char *msg, ...)
+{
+	va_list va_args;
+	va_start(va_args, msg);
+
+	n++; /* Property is 0-indexed, X buttons are 1-indexed */
+	switch(param->printformat)
+	{
+		case FORMAT_XORG_CONF:
+			printf("Option \"%s%d\" \"", param->name, n);
+			vprintf(msg, va_args);
+			printf("\"\n");
+			break;
+		case FORMAT_SHELL:
+			printf("xsetwacom set \"%s\" \"%s\" \"%d\" \"",
+					param->device_name, param->name, n);
+			vprintf(msg, va_args);
+			printf("\"\n");
+			break;
+		case FORMAT_DEFAULT:
 		default:
 			vprintf(msg, va_args);
 			printf("\n");
@@ -778,7 +857,7 @@ static void list_one_device(Display *dpy, XDeviceInfo *info)
 			if (atoms[j] == wacom_prop)
 				break;
 
-		if (j <= natoms)
+		if (j < natoms)
 		{
 			unsigned char	*data;
 			Atom		type;
@@ -875,7 +954,7 @@ static void list(Display *dpy, int argc, char **argv)
 		 strcmp(argv[0], "modifiers") == 0)
 		list_mod(dpy);
 	else
-		printf("unknown argument to list.\n");
+		fprintf(stderr, "unknown argument to list.\n");
 }
 
 /**
@@ -885,7 +964,7 @@ static void list(Display *dpy, int argc, char **argv)
  * specialkeys.
  * @return The X Keysym representing specialkey.
  */
-static char *convert_specialkey(const char *specialkey)
+static const char *convert_specialkey(const char *specialkey)
 {
 	struct modifier *m = modifiers;
 
@@ -928,7 +1007,7 @@ static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned 
 static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 
 /* Valid keywords for the --set ButtonX options */
-struct keywords {
+static struct keywords {
 	const char *keyword;
 	int (*func)(Display*, int, char **, unsigned long*, unsigned long *, const size_t size);
 } keywords[] = {
@@ -967,16 +1046,17 @@ static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned 
 	return 0;
 }
 
+/* the "displaytoggle" keyword isn't supported anymore, we just have this
+   here to tell people that. */
 static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size)
 {
-	if (*ndata + 1 > size) {
-		fprintf(stderr, "Insufficient space to store all commands.\n");
-		return 0;
+	static int once_only = 1;
+	if (once_only)
+	{
+		printf ("Note: The \"displaytoggle\" keyword is not supported "
+			"anymore and will be ignored.\n");
+		once_only = 0;
 	}
-	data[*ndata] = AC_DISPLAYTOGGLE;
-
-	*ndata += 1;
-
 	return 0;
 }
 
@@ -1047,12 +1127,41 @@ static int special_map_button(Display *dpy, int argc, char **argv, unsigned long
 	return i;
 }
 
-/* Return the first keycode to have the required keysym in the current group.
-   TODOs:
-   - parse other groups as well (do we need this?)
-   - for keysyms not on level 0, return the keycodes for the modifiers as
-     well
-*/
+/**
+ * Return the effective group number for a given keycode and requested
+ * global group number. If the group number is in-range for the keycode,
+ * the returned value will be identical. If the group number is out of
+ * range, the returned value will be wrapped, clamped, or redirected as
+ * necessary.
+ */
+static int keycode_effective_group(XkbDescPtr xkb, int keycode, int group)
+{
+	unsigned char info = XkbKeyGroupInfo(xkb, keycode);
+	unsigned char action = XkbOutOfRangeGroupInfo(info);
+	int n = XkbKeyNumGroups(xkb, keycode);
+
+	if (n <= 0)
+		return 0;
+	else if (group < n && group >= 0)
+		return group;
+	else if (action == XkbRedirectIntoRange)
+		return XkbOutOfRangeGroupNumber(info);
+	else if (action == XkbClampIntoRange)
+		return group < 1 ? 0 : group-1;
+	else /* if XkbWrapIntoRange */
+		return group % n;
+}
+
+/**
+ * Return the first keycode to have the required keysym. The effective
+ * group number is used durring scanning to ensure that an appropriate
+ * keycode is returned even if the active group does not define all
+ * keycodes.
+ *
+ *  TODOs:
+ *  - for keysyms not on level 0, return the keycodes for the modifiers as
+ *    well
+ */
 static int keysym_to_keycode(Display *dpy, KeySym sym)
 {
 	static XkbDescPtr xkb = NULL;
@@ -1066,10 +1175,11 @@ static int keysym_to_keycode(Display *dpy, KeySym sym)
 
 	for (kc = xkb->min_key_code; kc <= xkb->max_key_code; kc++)
 	{
+		int group = keycode_effective_group(xkb, kc, state.group);
 		int i;
 
-		for (i = 0; i < XkbKeyGroupWidth(xkb, kc, state.group); i++)
-			if (XKeycodeToKeysym(dpy, kc, i) == sym)
+		for (i = 0; i < XkbKeyGroupWidth(xkb, kc, group); i++)
+			if (XkbKeycodeToKeysym(dpy, kc, group, i) == sym)
 				goto out;
 	}
 
@@ -1091,7 +1201,7 @@ static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned 
 		KeySym ks;
 		KeyCode kc;
 		int need_press = 0, need_release = 0;
-		char *key = argv[i];
+		const char *key = argv[i];
 
 		if (strlen(key) > 1)
 		{
@@ -1135,10 +1245,12 @@ static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned 
 			key = convert_specialkey(key);
 			ks = XStringToKeysym(key);
 			if (ks == 0)
-				fprintf(stderr, "Warning: unable to map '%s' to a keycode.\n", key);
+				fprintf(stderr, "Warning: unable to map '%s' to a keysym.\n", key);
 		}
 
 		kc = keysym_to_keycode(dpy, ks);
+		if (kc == 0)
+			fprintf(stderr, "Warning: unable to map '%s' to a keycode.\n", key);
 
 		if (need_press && need_release && *ndata + nitems + 2 > size) {
 			fprintf(stderr, "Insufficient space to store all commands.\n");
@@ -1172,33 +1284,29 @@ static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned 
  */
 static char** strjoinsplit(int argc, char **argv, int *nwords)
 {
-	char buff[1024] = { 0 };
-	char **words	= NULL;
-	char *tmp, *tok;
-
-	while(argc--)
-	{
-		if (strlen(buff) + strlen(*argv) + 1 >= sizeof(buff))
-			break;
-
-		strcat(buff, *argv);
-		strcat(buff, " ");
-		argv++;
-	}
+	char **words = NULL;
+	int i;
 
 	*nwords = 0;
+	for (i = 0; i < argc; i++) {
+		char *tok = strtok(argv[i], " ");
+		while (tok) {
+			char **p = safe_realloc(words, *nwords+1, sizeof(char*));
+			if (!p) {
+				fprintf(stderr, "Unable to reallocate memory.\n");
+				return words;
+			}
 
-	for (tmp = buff; tmp && *tmp != '\0'; tmp = index((const char*)tmp, ' ') + 1)
-		(*nwords)++;
+			words = p;
+			words[*nwords] = strdup(tok);
+			if (!words[*nwords]) {
+				fprintf(stderr, "Unable to allocate memory.\n");
+				return words;
+			}
 
-	words = calloc(*nwords, sizeof(char*));
-
-	*nwords = 0;
-	tok = strtok(buff, " ");
-	while(tok)
-	{
-		words[(*nwords)++] = strdup(tok);
-		tok = strtok(NULL, " ");
+			(*nwords)++;
+			tok = strtok(NULL, " ");
+		}
 	}
 
 	return words;
@@ -1224,25 +1332,21 @@ static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* da
 	int  i = 0;
 	int  nwords = 0;
 	char **words = NULL;
-
+	int n;
+	
 	/* translate cmdline commands */
 	words = strjoinsplit(argc, argv, &nwords);
 
-	if (nwords==1 && sscanf(words[0], "%d", &i) == 1)
+	if (nwords==1 && sscanf(words[0], "%d", &n) == 1)
 	{ /* Mangle "simple" button maps into proper actions */
-		char **new_words = realloc(words, 2);
-		if (new_words == NULL)
-		{
-			fprintf(stderr, "Unable to reallocate memory.\n");
-			return False;
-		}
-
-		sprintf(new_words[0], "+%d", i);
-		new_words[1] = new_words[0];
-		new_words[0] = "button";
-
-		words  = new_words;
-		nwords = 2;
+		char *nargv[1];
+		
+		for (i =  0; i < nwords; i++)
+			free(words[i]);
+		free(words);
+		nargv[0] = alloca(32);
+		sprintf(nargv[0], "button +%d", n);
+		words = strjoinsplit(1, nargv, &nwords);
 	}
 
 	for (i = 0; i < nwords && *nitems < size; i++)
@@ -1270,10 +1374,13 @@ static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* da
 		if (!keyword_found)
 		{
 			fprintf(stderr, "Cannot parse keyword '%s' at position %d\n", words[i], i+1);
+			free(words);
 			return False;
 		}
 	}
 
+	for (i = 0; i < nwords; i++)
+		free(words[i]);
 	free(words);
 
 	return True;
@@ -1306,7 +1413,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 	unsigned long btnact_nitems, bytes_after;
 	unsigned long nitems = 0;
 
-	data = calloc(256, sizeof(long));
+	data = calloc(256, sizeof(unsigned long));
 	if (!parse_actions(dpy, argc, argv, data, &nitems, 256))
 		goto out;
 
@@ -1318,14 +1425,14 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 	if (offset >= btnact_nitems)
 	{
 		fprintf(stderr, "Invalid offset into %s property.\n", XGetAtomName(dpy, btnact_prop));
-		goto out;
+		goto out2;
 	}
 
 	if (format != 32 || type != XA_ATOM)
 	{
 		fprintf(stderr, "Property '%s' in an unexpected format. This is a bug.\n",
 		        XGetAtomName(dpy, btnact_prop));
-		goto out;
+		goto out2;
 	}
 
 	/* set or unset the property */
@@ -1339,7 +1446,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 		 */
 		fprintf(stderr, "Unsupported offset into '%s' property.\n",
 			XGetAtomName(dpy, btnact_prop));
-		goto out;
+		goto out2;
 	}
 
 	if (nitems > 0)
@@ -1366,6 +1473,8 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 	}
 
 	XFlush(dpy);
+out2:
+	XFree(btnact_data);
 out:
 	free(data);
 }
@@ -1408,7 +1517,7 @@ static void map_actions(Display *dpy, XDevice *dev, param_t* param, int argc, ch
 
 	if (strcmp(param->prop_name, WACOM_PROP_BUTTON_ACTIONS) == 0)
 	{
-		if (sscanf(argv[0], "%d", &offset) != 1)
+		if (sscanf(argv[0], "%d", &offset) != 1 || offset <= 0)
 		{
 			fprintf(stderr, "'%s' is not a valid button number.\n", argv[0]);
 			return;
@@ -1442,7 +1551,7 @@ static void set_xydefault(Display *dpy, XDevice *dev, param_t* param, int argc, 
 	{
 		fprintf(stderr, "Property for '%s' not available.\n",
 			param->name);
-		goto out;
+		return;
 	}
 
 	XGetDeviceProperty(dpy, dev, prop, 0, 1000, False, AnyPropertyType,
@@ -1464,7 +1573,7 @@ static void set_xydefault(Display *dpy, XDevice *dev, param_t* param, int argc, 
 				PropModeReplace, data, nitems);
 	XFlush(dpy);
 out:
-	free(data);
+	XFree(data);
 }
 
 static void set_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
@@ -1486,7 +1595,7 @@ static void set_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char 
 		mode = Absolute;
 	else
 	{
-		printf("Invalid device mode. Use 'Relative' or 'Absolute'.\n");
+		fprintf(stderr, "Invalid device mode. Use 'Relative' or 'Absolute'.\n");
 		return;
 	}
 
@@ -1542,14 +1651,15 @@ static void set_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	{
 		fprintf(stderr, "Property for '%s' has no or wrong value - this is a bug.\n",
 			param->name);
-		return;
+		goto out;
 	}
 
 	*data = rotation;
 	XChangeDeviceProperty(dpy, dev, prop, type, format,
 				PropModeReplace, data, nitems);
 	XFlush(dpy);
-
+out:
+	XFree(data);
 	return;
 }
 
@@ -1628,7 +1738,7 @@ static void set(Display *dpy, int argc, char **argv)
 	dev = find_device(dpy, argv[0]);
 	if (!dev)
 	{
-		printf("Cannot find device '%s'.\n", argv[0]);
+		fprintf(stderr, "Cannot find device '%s'.\n", argv[0]);
 		return;
 	}
 
@@ -1637,11 +1747,11 @@ static void set(Display *dpy, int argc, char **argv)
 	{
 		if (is_deprecated_parameter(argv[1]))
 			goto out;
-		printf("Unknown parameter name '%s'.\n", argv[1]);
+		fprintf(stderr, "Unknown parameter name '%s'.\n", argv[1]);
 		goto out;
 	} else if (param->prop_flags & PROP_FLAG_READONLY)
 	{
-		printf("'%s' is a read-only option.\n", argv[1]);
+		fprintf(stderr, "'%s' is a read-only option.\n", argv[1]);
 		goto out;
 	}
 
@@ -1650,7 +1760,7 @@ static void set(Display *dpy, int argc, char **argv)
 		prop = XInternAtom(dpy, param->prop_name, True);
 		if (!prop || !test_property(dpy, dev, prop))
 		{
-			printf("Property '%s' does not exist on device.\n",
+			fprintf(stderr, "Property '%s' does not exist on device.\n",
 				param->prop_name);
 			goto out;
 		}
@@ -1725,7 +1835,7 @@ out:
 		free(values[i]);
 	free(values);
 	XCloseDevice(dpy, dev);
-	free(data);
+	XFree(data);
 }
 
 static void get_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
@@ -1735,14 +1845,15 @@ static void get_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char 
 	XValuatorInfoPtr v;
 
 	info = XListInputDevices(dpy, &ndevices);
-	while(ndevices--)
+
+	for (i = 0; i < ndevices; i++)
 	{
-		d = &info[ndevices];
+		d = &info[i];
 		if (d->id == dev->device_id)
 			break;
 	}
 
-	if (!ndevices) /* device id 0 is reserved and can't be our device */
+	if (i >= ndevices)
 	{
 		fprintf(stderr, "Unable to locate device.\n");
 		return;
@@ -1766,7 +1877,7 @@ static void get_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char 
 
 static void get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
 {
-	char *rotation = NULL;
+	const char *rotation = NULL;
 	Atom prop, type;
 	int format;
 	unsigned char* data;
@@ -1795,7 +1906,7 @@ static void get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	{
 		fprintf(stderr, "Property for '%s' has no or wrong value - this is a bug.\n",
 			param->name);
-		return;
+		goto out;
 	}
 
 	switch(*data)
@@ -1816,6 +1927,8 @@ static void get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 
 	print_value(param, "%s", rotation);
 
+out:
+	XFree(data);
 	return;
 }
 
@@ -1886,7 +1999,7 @@ static int get_actions(Display *dpy, XDevice *dev,
 				if (last_type != current_type)
 					strcat(buff, "key ");
 				is_press = !!(action & AC_KEYBTNPRESS);
-				detail = XKeycodeToKeysym(dpy, detail, 0);
+				detail = XkbKeycodeToKeysym(dpy, detail, 0, 0);
 				break;
 			case AC_BUTTON:
 				if (last_type != current_type)
@@ -1918,7 +2031,10 @@ static int get_actions(Display *dpy, XDevice *dev,
 
 	XFree(data);
 
-	print_value(param, "%s", buff);
+	if (param->printformat == FORMAT_XORG_CONF)
+		fprintf(stderr, "%s: Actions are not supported by xorg.conf. Try shell format (-s) instead.\n", param->name);
+	else
+		print_button_value(param, offset, "%s", buff);
 
 	return 1;
 }
@@ -1964,7 +2080,7 @@ static int get_button(Display *dpy, XDevice *dev, param_t *param, int offset)
 		return 0;
 	}
 
-	print_value(param, "%d", prop);
+	print_button_value(param, offset, "%ld", prop);
 
 	return 1;
 }
@@ -1995,7 +2111,7 @@ static void get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char**
 
 	if (strcmp(param->prop_name, WACOM_PROP_BUTTON_ACTIONS) == 0)
 	{
-		if (sscanf(argv[0], "%d", &offset) != 1)
+		if (sscanf(argv[0], "%d", &offset) != 1 || offset <= 0)
 		{
 			fprintf(stderr, "'%s' is not a valid button number.\n", argv[0]);
 			return;
@@ -2075,15 +2191,15 @@ static Bool need_xinerama(Display *dpy)
  * @param y_org[out]   Offset from the desktop origin to the mapped area's top edge
  * @return             True if the function could determine the mapped area
  */
-Bool get_mapped_area(Display *dpy, XDevice *dev, int *width, int *height, int *x_org, int *y_org)
+static Bool get_mapped_area(Display *dpy, XDevice *dev, int *width, int *height, int *x_org, int *y_org)
 {
 	Atom matrix_prop = XInternAtom(dpy, "Coordinate Transformation Matrix", True);
 	Atom type;
-	int format;
+	int format, i;
 	unsigned long nitems, bytes_after;
-	float *data;
+	unsigned long *data;
+	float matrix[9];
 	Bool matrix_is_valid = True;
-	int i;
 
 	int display_width = DisplayWidth(dpy, DefaultScreen(dpy));
 	int display_height = DisplayHeight(dpy, DefaultScreen(dpy));
@@ -2099,7 +2215,7 @@ Bool get_mapped_area(Display *dpy, XDevice *dev, int *width, int *height, int *x
 	                   AnyPropertyType, &type, &format, &nitems,
 	                   &bytes_after, (unsigned char**)&data);
 
-	if (format != 32 || type != XInternAtom(dpy, "FLOAT", True))
+	if (format != 32 || type != XInternAtom(dpy, "FLOAT", True) || nitems != 9)
 	{
 		fprintf(stderr,"Property for '%s' has unexpected type - this is a bug.\n",
 			"Coordinate Transformation Matrix");
@@ -2107,32 +2223,27 @@ Bool get_mapped_area(Display *dpy, XDevice *dev, int *width, int *height, int *x
 		return False;
 	}
 
+	/* XI1 stores 32 bit properties (including float) as long,
+	 * regardless of architecture */
+	for (i = 0; i < ARRAY_SIZE(matrix); i++)
+		matrix[i] = *(float*)(&data[i]);
+
 	TRACE("Current transformation matrix:\n");
-	TRACE("	[ %f %f %f ]\n", data[0], data[1], data[2]);
-	TRACE("	[ %f %f %f ]\n", data[3], data[4], data[5]);
-	TRACE("	[ %f %f %f ]\n", data[6], data[7], data[8]);
+	TRACE("	[ %f %f %f ]\n", matrix[0], matrix[1], matrix[2]);
+	TRACE("	[ %f %f %f ]\n", matrix[3], matrix[4], matrix[5]);
+	TRACE("	[ %f %f %f ]\n", matrix[6], matrix[7], matrix[8]);
 
-	for (i = 0; i < nitems && matrix_is_valid; i++)
-	{
-		switch (i) {
-			case 0: *width  = rint(display_width  * data[i]); break;
-			case 2: *x_org  = rint(display_width  * data[i]); break;
-			case 4: *height = rint(display_height * data[i]); break;
-			case 5: *y_org  = rint(display_height * data[i]); break;
-			case 8:
-				if (data[i] != 1)
-					matrix_is_valid = False;
-				break;
-			default:
-				if (data[i] != 0)
-					matrix_is_valid = False;
-				break;
-		}
-	}
-	XFree(data);
-
-	if (!matrix_is_valid)
+	*width  = rint(display_width  * matrix[0]);
+	*x_org  = rint(display_width  * matrix[2]);
+	*height = rint(display_height * matrix[4]);
+	*y_org  = rint(display_height * matrix[5]);
+	if ((matrix[1] != 0 || matrix[3] != 0 || matrix[6] != 0 || matrix[7] != 0) ||
+	    (matrix[8] != 1)) {
 		fprintf(stderr, "Non-rectangular transformation matrix detected.\n");
+		matrix_is_valid = False;
+	}
+
+	XFree(data);
 
 	return matrix_is_valid;
 }
@@ -2247,14 +2358,14 @@ static Bool set_output_area(Display *dpy, XDevice *dev,
  */
 static Bool set_output_xrandr(Display *dpy, XDevice *dev, char *output_name)
 {
-	int i, found = 0;
+	int i, success = 0;
 	int x, y, width, height;
 	XRRScreenResources *res;
 	XRROutputInfo *output_info;
 	XRRCrtcInfo *crtc_info;
 
 	res = XRRGetScreenResources(dpy, DefaultRootWindow(dpy));
-	for (i = 0; i < res->noutput && !found; i++)
+	for (i = 0; i < res->noutput; i++)
 	{
 		output_info = XRRGetOutputInfo(dpy, res, res->outputs[i]);
 
@@ -2275,24 +2386,18 @@ static Bool set_output_xrandr(Display *dpy, XDevice *dev, char *output_name)
 
 		if (strcmp(output_info->name, output_name) == 0)
 		{
-			found = 1;
+			TRACE("Setting CRTC %s\n", output_name);
+			success = set_output_area(dpy, dev, x, y, width, height);
 			break;
 		}
 	}
 	XRRFreeScreenResources(res);
 
-	/* crtc holds our screen info, need to compare to actual screen size */
-	if (found)
-	{
-		TRACE("Setting CRTC %s\n", output_name);
-		return set_output_area(dpy, dev, x, y, width, height);
-	} else
-	{
-		printf("Unable to find output '%s'. "
+	if (!success)
+		fprintf(stderr, "Unable to find output '%s'. "
 			"Output may not be connected.\n", output_name);
 
-		return False;
-	}
+	return success;
 }
 
 /**
@@ -2426,9 +2531,8 @@ out:
 static void set_output(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv)
 {
 	int head_no;
-	int x, y;
+	int x, y, flags;
 	unsigned int width, height;
-	int flags = XParseGeometry(argv[0], &x, &y, &width, &height);
 
 	if (argc != param->arg_count)
 	{
@@ -2436,6 +2540,8 @@ static void set_output(Display *dpy, XDevice *dev, param_t *param, int argc, cha
 			param->arg_count);
 		return;
 	}
+
+	flags = XParseGeometry(argv[0], &x, &y, &width, &height);
 
 	if (MaskIsSet(flags, XValue|YValue|WidthValue|HeightValue))
 		set_output_area(dpy, dev, x, y, width, height);
@@ -2465,7 +2571,27 @@ static void get_all(Display *dpy, XDevice *dev, param_t *param, int argc, char *
 		{
 			p->device_name = param->device_name;
 			p->printformat = param->printformat;
-			get_param(dpy, dev, p, argc, argv);
+
+			if (p->prop_name && strcmp(p->prop_name, WACOM_PROP_BUTTON_ACTIONS) == 0)
+			{
+				int i;
+				int nmap = 256;
+				unsigned char map[nmap];
+
+				nmap = XGetDeviceButtonMapping(dpy, dev, map, nmap);
+				for (i = 1; i <= nmap; i++)
+				{
+					char tmparg[16];
+					char *tmpargv = &tmparg[0];
+
+					if (i > 3 && i < 8)
+						continue;
+					sprintf(tmparg, "%d", i);
+					get_param(dpy, dev, p, 1, &tmpargv);
+				}
+			}
+			else
+				get_param(dpy, dev, p, argc, argv);
 		}
 		p++;
 	}
@@ -2476,18 +2602,18 @@ static void get(Display *dpy, enum printformat printformat, int argc, char **arg
 	param_t *param;
 	XDevice *dev = NULL;
 
-	TRACE("'get' requested for '%s'.\n", argv[0]);
-
 	if (argc < 2)
 	{
 		usage();
 		return;
 	}
 
+	TRACE("'get' requested for '%s'.\n", argv[0]);
+
 	dev = find_device(dpy, argv[0]);
 	if (!dev)
 	{
-		printf("Cannot find device '%s'.\n", argv[0]);
+		fprintf(stderr, "Cannot find device '%s'.\n", argv[0]);
 		return;
 	}
 
@@ -2496,12 +2622,12 @@ static void get(Display *dpy, enum printformat printformat, int argc, char **arg
 	{
 		if (is_deprecated_parameter(argv[1]))
 			return;
-		printf("Unknown parameter name '%s'.\n", argv[1]);
-		return;
+		fprintf(stderr, "Unknown parameter name '%s'.\n", argv[1]);
+		goto out;
 	} else if (param->prop_flags & PROP_FLAG_WRITEONLY)
 	{
-		printf("'%s' is a write-only option.\n", argv[1]);
-		return;
+		fprintf(stderr, "'%s' is a write-only option.\n", argv[1]);
+		goto out;
 	} else
 	{
 		param->printformat = printformat;
@@ -2510,6 +2636,7 @@ static void get(Display *dpy, enum printformat printformat, int argc, char **arg
 
 	get_param(dpy, dev, param, argc - 2, &argv[2]);
 
+out:
 	XCloseDevice(dpy, dev);
 }
 
@@ -2527,7 +2654,7 @@ static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char
 		prop = XInternAtom(dpy, param->prop_name, True);
 		if (!prop || !test_property(dpy, dev, prop))
 		{
-			printf("Property '%s' does not exist on device.\n",
+			fprintf(stderr, "Property '%s' does not exist on device.\n",
 				param->prop_name);
 			return;
 		}
@@ -2548,7 +2675,7 @@ static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char
 	if (nitems <= param->prop_offset)
 	{
 		fprintf(stderr, "Property offset doesn't exist.\n");
-		return;
+		goto out;
 	}
 
 
@@ -2584,10 +2711,56 @@ static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char
 			print_value(param, "%s", str);
 			break;
 	}
+
+out:
+	XFree(data);
 }
 
 
 #ifndef BUILD_TEST
+
+#ifdef BUILD_FUZZINTERFACE
+void argsfromstdin(int *argc, char ***argv)
+{
+	const int READSIZE = 256;
+	char *buf = strdup((*argv)[0]);
+	size_t len = strlen(buf)+1;
+
+	while (1) {
+		char *p = realloc(buf, len + READSIZE);
+		size_t n;
+
+		if (!p)
+			exit(1);
+		buf = p;
+
+		n = fread(buf+len, 1, READSIZE, stdin);
+		if (n > 0) {
+			len += n;
+		}
+		else {
+			buf[len] = '\0';
+			len++;
+			break;
+		}
+	}
+
+	*argc = 0;
+	*argv = NULL;
+	while (len) {
+		char **p = realloc(*argv, (*argc + 1) * sizeof(char**));
+		if (!p)
+			exit(1);
+		*argv = p;
+		(*argv)[*argc] = buf;
+		(*argc)++;
+
+		len -= strlen(buf) + 1;
+		buf += strlen(buf) + 1;
+	}
+}
+#endif /* BUILD_FUZZINTERFACE */
+
 int main (int argc, char **argv)
 {
 	int c;
@@ -2609,6 +2782,10 @@ int main (int argc, char **argv)
 		{"get", 0, NULL, 0},
 		{NULL, 0, NULL, 0}
 	};
+
+#ifdef BUILD_FUZZINTERFACE
+	argsfromstdin(&argc, &argv);
+#endif /* BUILD FUZZINTERFACE */
 
 	if (argc < 2)
 	{
@@ -2665,7 +2842,7 @@ int main (int argc, char **argv)
 	dpy = XOpenDisplay(display);
 	if (!dpy)
 	{
-		printf("Failed to open Display %s.\n", display ? display : "");
+		fprintf(stderr, "Failed to open Display %s.\n", display ? display : "");
 		return -1;
 	}
 
@@ -2743,7 +2920,7 @@ static void test_is_modifier(void)
 static void test_convert_specialkey(void)
 {
 	char i;
-	char *converted;
+	const char *converted;
 	char buff[5];
 	struct modifier *m;
 
@@ -2791,7 +2968,7 @@ static void test_parameter_number(void)
 	 * deprecated them.
 	 * Numbers include trailing NULL entry.
 	 */
-	assert(ARRAY_SIZE(parameters) == 37);
+	assert(ARRAY_SIZE(parameters) == 39);
 	assert(ARRAY_SIZE(deprecated_parameters) == 17);
 }
 

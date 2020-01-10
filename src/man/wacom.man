@@ -147,6 +147,8 @@ server will think they are the same physical button.
 The default action reported to the X server is mouse button M click. Because
 X uses buttons 4, 5, 6, and 7 as the four scrolling directions, physical
 buttons 4 and higher are mapped to 8 and higher by default.
+Only simple button presses can be configured here; for more complex
+actions, use xsetwacom(__appmansuffix__).
 To ignore the button click, i.e., to not report any button click event 
 to the X server,  use "0" or "button 0".
 .TP 4
@@ -257,6 +259,16 @@ recognized as tap. A press and release event shorter than
 generates button press and release events. Presses longer than
 .B TapTime
 do not generate button events, only motion events.
+.TP 4
+.B Option \fI"PressureRecalibration"\fP \fI"bool"\fP
+Allows to disable pressure recalibration. Default: true.
+If the initial pressure of a device is != 0 the driver recalibrates
+the pressure range. This is to account for worn out devices.
+The downside is that when the user hits the tablet very hard the
+initial pressure reading may be unequal to zero even for a perfectly
+good pen. If the consecutive pressure readings are not higher than
+the initial pressure by a threshold no button event will be generated.
+This option allows to disable the recalibration.
 .RE
 .SH "TOUCH GESTURES"
 .SS Single finger (1FG)

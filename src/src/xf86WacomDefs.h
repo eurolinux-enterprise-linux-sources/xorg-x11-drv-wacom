@@ -96,10 +96,6 @@
 #define ABS_MT_SLOT 0x2f
 #endif
 
-/* defines to discriminate second side button and the eraser */
-#define ERASER_PROX     4
-#define OTHER_PROX      1
-
 /******************************************************************************
  * Forward Declarations
  *****************************************************************************/
@@ -112,7 +108,6 @@ typedef struct _WacomCommonRec WacomCommonRec, *WacomCommonPtr;
 typedef struct _WacomFilterState WacomFilterState, *WacomFilterStatePtr;
 typedef struct _WacomDeviceClass WacomDeviceClass, *WacomDeviceClassPtr;
 typedef struct _WacomTool WacomTool, *WacomToolPtr;
-typedef struct _WacomToolArea WacomToolArea, *WacomToolAreaPtr;
 
 /******************************************************************************
  * WacomModel - model-specific device capabilities
@@ -211,17 +206,37 @@ struct _WacomModel
 #define STRIP_RIGHT_UP    2
 #define STRIP_RIGHT_DN    3
 
-/* get/set/property */
-typedef struct _PROPINFO PROPINFO;
-
-struct _PROPINFO
+/******************************************************************************
+ * WacomDeviceState
+ *****************************************************************************/
+struct _WacomDeviceState
 {
-	Atom wcmProp;
-	char paramName[32];
-	int nParamID;
-	int nFormat;
-	int nSize;
-	int nDefault;
+	InputInfoPtr pInfo;
+	int device_id;		/* tool id reported from the physical device */
+	int device_type;
+	unsigned int serial_num;
+	int x;
+	int y;
+	int buttons;
+	int pressure;
+	int tiltx;
+	int tilty;
+	int stripx;
+	int stripy;
+	int rotation;
+	int abswheel;
+	int abswheel2;
+	int relwheel;
+	int distance;
+	int throttle;
+	int proximity;
+	int sample;	/* wraps every 24 days */
+	int time;
+};
+
+static const struct _WacomDeviceState OUTPROX_STATE = {
+  .abswheel = MAX_PAD_RING + 1,
+  .abswheel2 = MAX_PAD_RING + 1
 };
 
 struct _WacomDeviceRec
@@ -239,15 +254,13 @@ struct _WacomDeviceRec
 	int bottomY;		/* Y bottom in device coordinates */
 	int resolX;             /* X resolution */
 	int resolY;             /* Y resolution */
-	int maxX;	        /* tool physical maxX in device coordinates*/
-	int maxY;	        /* tool physical maxY in device coordinates*/
-	double factorX;		/* X factor */
-	double factorY;		/* Y factor */
+	int minX;	        /* tool physical minX in device coordinates */
+	int minY;	        /* tool physical minY in device coordinates */
+	int maxX;	        /* tool physical maxX in device coordinates */
+	int maxY;	        /* tool physical maxY in device coordinates */
 	unsigned int serial;	/* device serial number this device takes (if 0, any serial is ok) */
 	unsigned int cur_serial; /* current serial in prox */
 	int cur_device_id;	/* current device ID in prox */
-	int leftPadding;	/* left padding for virtual tablet in device coordinates*/
-	int topPadding;		/* top padding for virtual tablet in device coordinates*/
 
 	/* button mapping information
 	 *
@@ -272,76 +285,27 @@ struct _WacomDeviceRec
 	WacomCommonPtr common;  /* common info pointer */
 
 	/* state fields in device coordinates */
-	int currentX;           /* current X position */
-	int currentY;           /* current Y position */
-	int currentSX;          /* current screen X position in screen coords */
-	int currentSY;          /* current screen Y position in screen coords */
-	int oldX;               /* previous X position */
-	int oldY;               /* previous Y position */
-	int oldZ;               /* previous pressure */
-	int oldTiltX;           /* previous tilt in x direction */
-	int oldTiltY;           /* previous tilt in y direction */    
-	int oldWheel;           /* previous wheel value */    
-	int oldWheel2;          /* previous wheel2 value */
-	int oldRot;             /* previous rotation value */
-	int oldStripX;          /* previous left strip value */
-	int oldStripY;          /* previous right strip value */
-	int oldThrottle;        /* previous throttle value */
-	int oldButtons;         /* previous buttons state */
-	int oldProximity;       /* previous proximity */
+	struct _WacomDeviceState oldState; /* previous state information */
 	int oldCursorHwProx;	/* previous cursor hardware proximity */
-	int old_device_id;	/* last in prox device id */
-	unsigned int old_serial;/* last in prox tool serial number */
-	int devReverseCount;	/* Relative ReverseConvert called twice each movement*/
-
-	/* JEJ - throttle */
-	int throttleStart;      /* time in ticks for last wheel movement */
-	int throttleLimit;      /* time in ticks for next wheel movement */
-	int throttleValue;      /* current throttle value */
 
 	/* JEJ - filters */
 	int pPressCurve[FILTER_PRESSURE_RES + 1]; /* pressure curve */
 	int nPressCtrl[4];      /* control points for curve */
 	int minPressure;	/* the minimum pressure a pen may hold */
-
+	int oldMinPressure;     /* to record the last minPressure before going out of proximity */
+	unsigned int eventCnt;  /* count number of events while in proximity */
+	int maxRawPressure;     /* maximum 'raw' pressure seen until first button event */
 	WacomToolPtr tool;         /* The common tool-structure for this device */
 
 	int isParent;		/* set to 1 if the device is not auto-hotplugged */
 
 	OsTimerPtr serial_timer; /* timer used for serial number property update */
 	OsTimerPtr tap_timer;   /* timer used for tap timing */
+	OsTimerPtr touch_timer; /* timer used for touch switch property update */
 };
-
-/******************************************************************************
- * WacomDeviceState
- *****************************************************************************/
 
 #define MAX_SAMPLES	20
 #define DEFAULT_SAMPLES 4
-
-struct _WacomDeviceState
-{
-	InputInfoPtr pInfo;
-	int device_id;		/* tool id reported from the physical device */
-	int device_type;
-	unsigned int serial_num;
-	int x;
-	int y;
-	int buttons;
-	int pressure;
-	int tiltx;
-	int tilty;
-	int stripx;
-	int stripy;
-	int rotation;
-	int abswheel;
-	int abswheel2;
-	int relwheel;
-	int distance;
-	int throttle;
-	int proximity;
-	int sample;	/* wraps every 24 days */
-};
 
 struct _WacomFilterState
 {
@@ -383,7 +347,7 @@ struct _WacomDeviceClass
 {
 	Bool (*Detect)(InputInfoPtr pInfo); /* detect device */
 	Bool (*ParseOptions)(InputInfoPtr pInfo); /* parse class-specific options */
-	Bool (*Init)(InputInfoPtr pInfo, char* id, float *version);   /* initialize device */
+	Bool (*Init)(InputInfoPtr pInfo, char* id, size_t id_len, float *version);   /* initialize device */
 	int  (*ProbeKeys)(InputInfoPtr pInfo); /* set the bits for the keys supported */
 };
 
@@ -415,6 +379,12 @@ enum WacomProtocol {
 	WCM_PROTOCOL_5
 };
 
+struct _WacomDriverRec
+{
+	WacomDevicePtr active;     /* Arbitrate motion through this pointer */
+};
+extern struct _WacomDriverRec WACOM_DRIVER; // Defined in wcmCommon.c
+
 struct _WacomCommonRec 
 {
 	/* Do not move device_path, same offset as priv->name. Used by DBG macro */
@@ -430,9 +400,13 @@ struct _WacomCommonRec
 	unsigned long wcmKeys[NBITS(KEY_MAX)]; /* supported tool types for the device */
 	WacomDevicePtr wcmTouchDevice; /* The pointer for pen to access the
 					  touch tool of the same device id */
-	Bool wcmPenInProx;      /* Keep pen in-prox state for touch tool */
+
+	Bool wcmHasHWTouchSwitch;    /* Tablet has a touch on/off switch */
+	int wcmHWTouchSwitchState;   /* touch event disable/enabled by hardware switch */
 
 	/* These values are in tablet coordinates */
+	int wcmMinX;                 /* tablet min X value */
+	int wcmMinY;                 /* tablet min Y value */
 	int wcmMaxX;                 /* tablet max X value */
 	int wcmMaxY;                 /* tablet max Y value */
 	int wcmMaxZ;                 /* tablet max Z value */
@@ -486,6 +460,8 @@ struct _WacomCommonRec
 	int wcmCursorProxoutDistDefault; /* Default max mouse distance for proxy-out */
 	int wcmSuppress;        	 /* transmit position on delta > supress */
 	int wcmRawSample;	     /* Number of raw data used to filter an event */
+	int wcmPressureRecalibration; /* Determine if pressure recalibration of
+					 worn pens should be performed */
 
 	int bufpos;                        /* position with buffer */
 	unsigned char buffer[BUFFER_SIZE]; /* data read from device */

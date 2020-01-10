@@ -23,7 +23,7 @@
 # Initialize Autoconf
 AC_PREREQ([2.60])
 AC_INIT([xf86-input-wacom],
-        [0.23.0],
+        [0.32.0],
         [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg],
         [xf86-input-wacom])
 AC_CONFIG_MACRO_DIR([m4])
@@ -49,11 +49,13 @@ XORG_WITH_DOXYGEN(1.6.1)
 # Checks for libraries.
 AC_CHECK_LIB([m], [rint])
 
+XPROTOS="xproto xext kbproto inputproto randrproto"
+
 # Obtain compiler/linker options from server and required extensions
-PKG_CHECK_MODULES(XORG, [xorg-server >= 1.7.0] xproto xext kbproto inputproto randrproto)
+PKG_CHECK_MODULES(XORG, [xorg-server >= 1.7.0] $XPROTOS)
 
 # Obtain compiler/linker options for the xsetwacom tool
-PKG_CHECK_MODULES(X11, x11 xi xrandr xinerama)
+PKG_CHECK_MODULES(X11, x11 xi xrandr xinerama $XPROTOS)
 
 # Obtain compiler/linker options for libudev used by ISDV4 code
 PKG_CHECK_MODULES(UDEV, libudev)
@@ -75,9 +77,10 @@ AC_SUBST([DRIVER_NAME])
 # -----------------------------------------------------------------------------
 # Define a configure option for code debugging
 AC_ARG_ENABLE(debug,
-              AS_HELP_STRING([--enable-debug],
-                             [Enable debugging (default: disabled)]),
-                             [DEBUGGING=$enableval], [DEBUGGING=yes])
+              AS_HELP_STRING([--disable-debug],
+                             [Disable debugging (default: enabled)]),
+              [DEBUGGING=$enableval],
+              [DEBUGGING=yes])
 
 # Define the C preprocessor macro DEBUG in config.h
 if test "x$DEBUGGING" = xyes; then
@@ -102,6 +105,12 @@ AC_ARG_WITH([xorg-conf-dir],
             [configdir="$sysconfigdir"])
 AC_SUBST(configdir)
 AM_CONDITIONAL(HAS_XORG_CONF_DIR, [test "x$configdir" != "x"])
+
+AC_ARG_ENABLE(fuzz-interface, AS_HELP_STRING([--enable-fuzz-interface],
+                          [Enable xsetwacom to take NUL-separated commands from stdin (default: no)]),
+                          [FUZZINTERFACE=$enableval],
+                          [FUZZINTERFACE=no])
+AM_CONDITIONAL(FUZZINTERFACE, [test "x$FUZZINTERFACE" = xyes])
 
 AC_ARG_ENABLE(unit-tests, AS_HELP_STRING([--enable-unit-tests],
                           [Enable unit-tests (default: auto)]),
@@ -144,6 +153,24 @@ if test "x$UNITTESTS" = xyes; then
 fi
 AM_CONDITIONAL(UNITTESTS, [test "x$UNITTESTS" = xyes])
 
+AC_ARG_WITH([systemd-unit-dir],
+            AS_HELP_STRING([--with-systemd-unit-dir=DIR],
+                           [systemd unit directory [[default=$libdir/systemd/system]]]),
+            [unitdir="$withval"],
+            [unitdir="$libdir/systemd/system"])
+SYSTEMD_UNIT_DIR=${unitdir}
+AC_SUBST(SYSTEMD_UNIT_DIR)
+AM_CONDITIONAL(HAVE_SYSTEMD_UNIT_DIR, [test "x$SYSTEMD_UNIT_DIR" != "xno"])
+
+AC_ARG_WITH(udev-rules-dir,                                                   
+            AS_HELP_STRING([--with-udev-rules-dir=DIR],
+                           [Directory where udev expects its rules files
+                           [[default=$libdir/udev/rules.d]]]),
+            [udevdir="$withval"],                   
+            [udevdir="$libdir/udev/rules.d"])
+UDEV_RULES_DIR=${udevdir}
+AC_SUBST(UDEV_RULES_DIR)                                               
+AM_CONDITIONAL(HAVE_UDEV_RULES_DIR, [test "x$UDEV_RULES_DIR" != "xno"])
 
 
 # -----------------------------------------------------------------------------

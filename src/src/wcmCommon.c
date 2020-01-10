@@ -28,6 +28,11 @@
 #include <xkbsrv.h>
 #include <xf86_OSproc.h>
 
+
+struct _WacomDriverRec WACOM_DRIVER = {
+	.active = NULL,
+};
+
 /* X servers pre 1.9 didn't copy data passed into xf86Post*Event.
  * Data passed in would be modified, requiring the driver to copy the
  * data beforehand.
@@ -50,8 +55,7 @@ static int *VCOPY(const int *valuators, int nvals)
  ****************************************************************************/
 
 static int applyPressureCurve(WacomDevicePtr pDev, const WacomDeviceStatePtr pState);
-static void commonDispatchDevice(WacomCommonPtr common,
-				 unsigned int channel,
+static void commonDispatchDevice(InputInfoPtr pInfo,
 				 const WacomChannelPtr pChannel,
 				 enum WacomSuppressMode suppress);
 static void sendAButton(InputInfoPtr pInfo, int button, int mask,
@@ -86,38 +90,6 @@ void set_absolute(InputInfoPtr pInfo, Bool absolute)
 }
 
 /*****************************************************************************
- * wcmMappingFactor --
- *   calculate the proper tablet to screen mapping factor according to the 
- *   screen/desktop size and the tablet size 
- ****************************************************************************/
-
-void wcmMappingFactor(InputInfoPtr pInfo)
-{
-	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
-	double size_x, size_y;
-
-	DBG(10, priv, "\n"); /* just prints function name */
-
-	DBG(10, priv,
-		"Active tablet area x=%d y=%d map\n",
-		priv->bottomX, priv->bottomY);
-
-	/* bottomX/bottomY are scaled values of maxX/maxY such that it
-	 * will scale tablet to screen ratio when passed to xf86AxisScale().
-	 * Use this to compute similar factor for scaling in relative
-	 * mode.  If screen:tablet are 1:1 ratio then no scaling.
-	 */
-
-	size_x = priv->bottomX - priv->topX;
-	size_y = priv->bottomY - priv->topY;
-
-	priv->factorX = size_x / priv->bottomX;
-	priv->factorY = size_y / priv->bottomY;
-	DBG(2, priv, "X factor = %.3f, Y factor = %.3f\n",
-		priv->factorX, priv->factorY);
-}
-
-/*****************************************************************************
  * wcmSendButtons --
  *   Send button events by comparing the current button mask with the
  *   previous one.
@@ -126,7 +98,7 @@ void wcmMappingFactor(InputInfoPtr pInfo)
 static void wcmSendButtons(InputInfoPtr pInfo, int buttons,
 			   int first_val, int num_vals, int *valuators)
 {
-	int button, mask, first_button;
+	unsigned int button, mask, first_button;
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 	WacomCommonPtr common = priv->common;
 	DBG(6, priv, "buttons=%d\n", buttons);
@@ -150,10 +122,10 @@ static void wcmSendButtons(InputInfoPtr pInfo, int buttons,
 		if ((buttons & 1) == 0)
 			buttons = 0;
 		/* tip pressed? send all other button presses */
-		else if ((buttons & 1) != (priv->oldButtons & 1))
-			priv->oldButtons = 0;
+		else if ((buttons & 1) != (priv->oldState.buttons & 1))
+			priv->oldState.buttons = 0;
 		/* other button changed while tip is still down? release tip */
-		else if ((buttons & 1) && (buttons != priv->oldButtons))
+		else if ((buttons & 1) && (buttons != priv->oldState.buttons))
 		{
 			buttons &= ~1;
 			first_button = 0;
@@ -162,8 +134,8 @@ static void wcmSendButtons(InputInfoPtr pInfo, int buttons,
 
 	for (button = first_button; button < WCM_MAX_BUTTONS; button++)
 	{
-		mask = 1 << button;
-		if ((mask & priv->oldButtons) != (mask & buttons))
+		mask = 1u << button;
+		if ((mask & priv->oldState.buttons) != (mask & buttons))
 			sendAButton(pInfo, button, (mask & buttons),
 					first_val, num_vals, valuators);
 	}
@@ -307,7 +279,7 @@ static void sendAButton(InputInfoPtr pInfo, int button, int mask,
  * @param flags    Flags defining axis attributes: AXIS_INVERT and AXIS_BITWISE
  * @return         Relative change in axis value
  */
-static int getScrollDelta(int current, int old, int wrap, int flags)
+TEST_NON_STATIC int getScrollDelta(int current, int old, int wrap, int flags)
 {
 	int delta;
 
@@ -352,7 +324,7 @@ static int getScrollDelta(int current, int old, int wrap, int flags)
  * @param action_dn    Array index of action to send on scroll down
  * @return             Array index of action that should be performed, or -1 if none.
  */
-static int getWheelButton(int delta, int action_up, int action_dn)
+TEST_NON_STATIC int getWheelButton(int delta, int action_up, int action_dn)
 {
 	if (delta > 0)
 		return action_up;
@@ -394,9 +366,9 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	DBG(10, priv, "\n");
 
 	/* emulate events for left strip */
-	delta = getScrollDelta(ds->stripx, priv->oldStripX, 0, AXIS_INVERT | AXIS_BITWISE);
+	delta = getScrollDelta(ds->stripx, priv->oldState.stripx, 0, AXIS_INVERT | AXIS_BITWISE);
 	idx = getWheelButton(delta, STRIP_LEFT_UP, STRIP_LEFT_DN);
-	if (idx >= 0 && IsPad(priv) && priv->oldProximity == ds->proximity)
+	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Left touch strip scroll delta = %d\n", delta);
 		sendWheelStripEvent(priv->strip_keys[idx], ARRAY_SIZE(priv->strip_keys[idx]),
@@ -404,9 +376,9 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	}
 
 	/* emulate events for right strip */
-	delta = getScrollDelta(ds->stripy, priv->oldStripY, 0, AXIS_INVERT | AXIS_BITWISE);
+	delta = getScrollDelta(ds->stripy, priv->oldState.stripy, 0, AXIS_INVERT | AXIS_BITWISE);
 	idx = getWheelButton(delta, STRIP_RIGHT_UP, STRIP_RIGHT_DN);
-	if (idx >= 0 && IsPad(priv) && priv->oldProximity == ds->proximity)
+	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Right touch strip scroll delta = %d\n", delta);
 		sendWheelStripEvent(priv->strip_keys[idx], ARRAY_SIZE(priv->strip_keys[idx]),
@@ -416,7 +388,7 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	/* emulate events for relative wheel */
 	delta = getScrollDelta(ds->relwheel, 0, 0, 0);
 	idx = getWheelButton(delta, WHEEL_REL_UP, WHEEL_REL_DN);
-	if (idx >= 0 && (IsCursor(priv) || IsPad(priv)) && priv->oldProximity == ds->proximity)
+	if (idx >= 0 && (IsCursor(priv) || IsPad(priv)) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Relative wheel scroll delta = %d\n", delta);
 		sendWheelStripEvent(priv->wheel_keys[idx], ARRAY_SIZE(priv->wheel_keys[idx]),
@@ -424,9 +396,9 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	}
 
 	/* emulate events for left touch ring */
-	delta = getScrollDelta(ds->abswheel, priv->oldWheel, MAX_PAD_RING, AXIS_INVERT);
+	delta = getScrollDelta(ds->abswheel, priv->oldState.abswheel, MAX_PAD_RING, AXIS_INVERT);
 	idx = getWheelButton(delta, WHEEL_ABS_UP, WHEEL_ABS_DN);
-	if (idx >= 0 && IsPad(priv) && priv->oldProximity == ds->proximity)
+	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Left touch wheel scroll delta = %d\n", delta);
 		sendWheelStripEvent(priv->wheel_keys[idx], ARRAY_SIZE(priv->wheel_keys[idx]),
@@ -434,9 +406,9 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	}
 
 	/* emulate events for right touch ring */
-	delta = getScrollDelta(ds->abswheel2, priv->oldWheel2, MAX_PAD_RING, AXIS_INVERT);
+	delta = getScrollDelta(ds->abswheel2, priv->oldState.abswheel2, MAX_PAD_RING, AXIS_INVERT);
 	idx = getWheelButton(delta, WHEEL2_ABS_UP, WHEEL2_ABS_DN);
-	if (idx >= 0 && IsPad(priv) && priv->oldProximity == ds->proximity)
+	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Right touch wheel scroll delta = %d\n", delta);
 		sendWheelStripEvent(priv->wheel_keys[idx], ARRAY_SIZE(priv->wheel_keys[idx]),
@@ -456,13 +428,13 @@ static void sendCommonEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	int buttons = ds->buttons;
 
 	/* send button events when state changed or first time in prox and button unpresses */
-	if (priv->oldButtons != buttons || (!priv->oldProximity && !buttons))
+	if (priv->oldState.buttons != buttons || (!priv->oldState.proximity && !buttons))
 		wcmSendButtons(pInfo,buttons, first_val, num_vals, valuators);
 
 	/* emulate wheel/strip events when defined */
-	if ( ds->relwheel || (ds->abswheel != priv->oldWheel) || (ds->abswheel2 != priv->oldWheel2) ||
-		( (ds->stripx - priv->oldStripX) && ds->stripx && priv->oldStripX) || 
-			((ds->stripy - priv->oldStripY) && ds->stripy && priv->oldStripY) )
+	if ( ds->relwheel || (ds->abswheel != priv->oldState.abswheel) || (ds->abswheel2 != priv->oldState.abswheel2) ||
+		( (ds->stripx - priv->oldState.stripx) && ds->stripx && priv->oldState.stripx) ||
+			((ds->stripy - priv->oldState.stripy) && ds->stripy && priv->oldState.stripy) )
 		sendWheelStripEvents(pInfo, ds, first_val, num_vals, valuators);
 }
 
@@ -517,34 +489,13 @@ void wcmRotateAndScaleCoordinates(InputInfoPtr pInfo, int* x, int* y)
 }
 
 static void wcmUpdateOldState(const InputInfoPtr pInfo,
-			      const WacomDeviceState *ds)
+			      const WacomDeviceState *ds, int currentX, int currentY)
 {
 	const WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
-	int tx, ty;
 
-	priv->oldWheel = ds->abswheel;
-	priv->oldWheel2 = ds->abswheel2;
-	priv->oldButtons = ds->buttons;
-
-	if (IsPad(priv))
-	{
-		tx = ds->stripx;
-		ty = ds->stripy;
-	} else
-	{
-		tx = ds->tiltx;
-		ty = ds->tilty;
-	}
-
-	priv->oldX = priv->currentX;
-	priv->oldY = priv->currentY;
-	priv->oldZ = ds->pressure;
-	priv->oldTiltX = tx;
-	priv->oldTiltY = ty;
-	priv->oldStripX = ds->stripx;
-	priv->oldStripY = ds->stripy;
-	priv->oldRot = ds->rotation;
-	priv->oldThrottle = ds->throttle;
+	priv->oldState = *ds;
+	priv->oldState.x = currentX;
+	priv->oldState.y = currentY;
 }
 
 static void
@@ -554,14 +505,14 @@ wcmSendPadEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	int i;
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 
-	if (!priv->oldProximity && ds->proximity)
+	if (!priv->oldState.proximity && ds->proximity)
 		xf86PostProximityEventP(pInfo->dev, 1, first_val, num_vals, VCOPY(valuators, num_vals));
 
 	for (i = 0; i < num_vals; i++)
 		if (valuators[i])
 			break;
 	if (i < num_vals || ds->buttons || ds->relwheel ||
-	    (ds->abswheel != priv->oldWheel) || (ds->abswheel2 != priv->oldWheel2))
+	    (ds->abswheel != priv->oldState.abswheel) || (ds->abswheel2 != priv->oldState.abswheel2))
 	{
 		sendCommonEvents(pInfo, ds, first_val, num_vals, valuators);
 
@@ -573,11 +524,11 @@ wcmSendPadEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	}
 	else
 	{
-		if (priv->oldButtons)
+		if (priv->oldState.buttons)
 			wcmSendButtons(pInfo, ds->buttons, first_val, num_vals, valuators);
 	}
 
-	if (priv->oldProximity && !ds->proximity)
+	if (priv->oldState.proximity && !ds->proximity)
 		xf86PostProximityEventP(pInfo->dev, 0, first_val, num_vals,
 					VCOPY(valuators, num_vals));
 }
@@ -591,40 +542,27 @@ wcmSendNonPadEvents(InputInfoPtr pInfo, const WacomDeviceState *ds,
 
 	if (!is_absolute(pInfo))
 	{
-		valuators[0] -= priv->oldX;
-		valuators[1] -= priv->oldY;
-		valuators[2] -= priv->oldZ;
+		valuators[0] -= priv->oldState.x;
+		valuators[1] -= priv->oldState.y;
+		valuators[2] -= priv->oldState.pressure;
 		if (IsCursor(priv))
 		{
-			valuators[3] -= priv->oldRot;
-			valuators[4] -= priv->oldThrottle;
+			valuators[3] -= priv->oldState.rotation;
+			valuators[4] -= priv->oldState.throttle;
 		} else
 		{
-			valuators[3] -= priv->oldTiltX;
-			valuators[4] -= priv->oldTiltY;
+			valuators[3] -= priv->oldState.tiltx;
+			valuators[4] -= priv->oldState.tilty;
 		}
-		valuators[5] -= priv->oldWheel;
-		valuators[6] -= priv->oldWheel2;
+		valuators[5] -= priv->oldState.abswheel;
+		valuators[6] -= priv->oldState.abswheel2;
 	}
 
 	/* coordinates are ready we can send events */
 	if (ds->proximity)
 	{
-		/* unify acceleration in both directions
-		 * for relative mode to draw a circle
-		 */
-		if (!is_absolute(pInfo))
-			valuators[0] *= priv->factorY / priv->factorX;
-		else
-		{
-			/* Padding virtual values */
-			wcmVirtualTabletPadding(pInfo);
-			valuators[0] += priv->leftPadding;
-			valuators[1] += priv->topPadding;
-		}
-
 		/* don't emit proximity events if device does not support proximity */
-		if ((pInfo->dev->proximity && !priv->oldProximity))
+		if ((pInfo->dev->proximity && !priv->oldState.proximity))
 			xf86PostProximityEventP(pInfo->dev, 1, first_val, num_vals,
 						VCOPY(valuators, num_vals));
 
@@ -654,10 +592,10 @@ wcmSendNonPadEvents(InputInfoPtr pInfo, const WacomDeviceState *ds,
 
 		/* reports button up when the device has been
 		 * down and becomes out of proximity */
-		if (priv->oldButtons)
+		if (priv->oldState.buttons)
 			wcmSendButtons(pInfo, buttons, first_val, num_vals, valuators);
 
-		if (priv->oldProximity)
+		if (priv->oldState.proximity)
 			xf86PostProximityEventP(pInfo->dev, 0, first_val, num_vals,
 						VCOPY(valuators, num_vals));
 	} /* not in proximity */
@@ -700,8 +638,8 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 	/* don't move the cursor when going out-prox */
 	if (!ds->proximity)
 	{
-		x = priv->oldX;
-		y = priv->oldY;
+		x = priv->oldState.x;
+		y = priv->oldState.y;
 	}
 
 	/* use tx and ty to report stripx and stripy */
@@ -714,7 +652,7 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 	DBG(7, priv, "[%s] o_prox=%s x=%d y=%d z=%d "
 		"b=%s b=%d tx=%d ty=%d wl=%d wl2=%d rot=%d th=%d\n",
 		pInfo->type_name,
-		priv->oldProximity ? "true" : "false",
+		priv->oldState.proximity ? "true" : "false",
 		x, y, z, is_button ? "true" : "false", ds->buttons,
 		tx, ty, ds->abswheel, ds->abswheel2, ds->rotation, ds->throttle);
 
@@ -751,14 +689,15 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 		x, y, z, v3, v4, v5, v6, id, serial,
 		is_button ? "true" : "false", ds->buttons);
 
-	priv->currentX = x;
-	priv->currentY = y;
-
-	/* update the old records */
-	if(!priv->oldProximity)
+	/* when entering prox, replace the zeroed-out oldState with a copy of
+	 * the current state to prevent jumps. reset the prox and button state
+	 * to zero to properly detect changes.
+	 */
+	if(!priv->oldState.proximity)
 	{
-		wcmUpdateOldState(pInfo, ds);
-		priv->oldButtons = 0;
+		wcmUpdateOldState(pInfo, ds, x, y);
+		priv->oldState.proximity = 0;
+		priv->oldState.buttons = 0;
 	}
 
 	valuators[0] = x;
@@ -767,7 +706,8 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 	valuators[3] = v3;
 	valuators[4] = v4;
 	valuators[5] = v5;
-	valuators[6] = v6;
+	if (priv->naxes > 6)
+		valuators[6] = v6;
 
 	if (type == PAD_ID)
 		wcmSendPadEvents(pInfo, ds, 3, priv->naxes - 3, &valuators[3]); /* pad doesn't post x/y/z */
@@ -777,26 +717,13 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 			wcmSendNonPadEvents(pInfo, ds, 0, priv->naxes, valuators);
 	}
 
-	priv->oldProximity = ds->proximity;
 	if (ds->proximity)
-		wcmUpdateOldState(pInfo, ds);
+		wcmUpdateOldState(pInfo, ds, x, y);
 	else
 	{
-		priv->oldButtons = 0;
-		priv->oldWheel = MAX_PAD_RING + 1;
-		priv->oldWheel2 = MAX_PAD_RING + 1;
-		priv->oldX = 0;
-		priv->oldY = 0;
-		priv->oldZ = 0;
-		priv->oldTiltX = 0;
-		priv->oldTiltY = 0;
-		priv->oldStripX = 0;
-		priv->oldStripY = 0;
-		priv->oldRot = 0;
-		priv->oldThrottle = 0;
-		priv->devReverseCount = 0;
-		priv->old_serial = serial;
-		priv->old_device_id = id;
+		priv->oldState = OUTPROX_STATE;
+		priv->oldState.serial_num = serial;
+		priv->oldState.device_id = id;
 		wcmUpdateSerial(pInfo, 0, 0);
 	}
 }
@@ -815,7 +742,7 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
  * @retval SUPPRESS_NONE Process event normally.
  * @retval SUPPRESS_NON_MOTION Suppress all data but motion data.
  */
-static enum WacomSuppressMode
+TEST_NON_STATIC enum WacomSuppressMode
 wcmCheckSuppress(WacomCommonPtr common,
 		 const WacomDeviceState* dsOrig,
 		 WacomDeviceState* dsNew)
@@ -875,6 +802,83 @@ out:
 	return returnV;
 }
 
+/**
+ * Find the device the current events are meant for. If multiple tools are
+ * configured on this tablet, the one that matches the serial number for the
+ * current device state is returned. If none match, the tool that has a
+ * serial of 0 is returned.
+ *
+ * @param ds The current device state as read from the fd
+ * @return The tool that should be used to emit the current events.
+ */
+static WacomToolPtr findTool(const WacomCommonPtr common,
+			     const WacomDeviceState *ds)
+{
+	WacomToolPtr tooldefault = NULL;
+	WacomToolPtr tool = NULL;
+
+	/* 1: Find the tool (the one with correct serial or in second
+	 * hand, the one with serial set to 0 if no match with the
+	 * specified serial exists) that is used for this event */
+	for (tool = common->wcmTool; tool; tool = tool->next)
+	{
+		if (tool->typeid == ds->device_type)
+		{
+			if (tool->serial == ds->serial_num)
+				break;
+			else if (!tool->serial)
+				tooldefault = tool;
+		}
+	}
+
+	/* Use default tool (serial == 0) if no specific was found */
+	if (!tool)
+		tool = tooldefault;
+
+	return tool;
+}
+
+/**
+ * Check if the given device should grab control of the pointer in
+ * preference to whatever tool currently has access.
+ *
+ * @param pInfo  The device to check for access
+ * @param ds     The current state of the device
+ * @returns      'TRUE' if control of the pointer should be granted, FALSE otherwise
+ */
+static Bool check_arbitrated_control(InputInfoPtr pInfo, WacomDeviceStatePtr ds)
+{
+	WacomDevicePtr active = WACOM_DRIVER.active;
+	WacomDevicePtr priv = pInfo->private;
+
+	if (IsPad(priv)) {
+		/* Pad may never be the "active" pointer controller */
+		return FALSE;
+	}
+
+	if (active == NULL || active->oldState.device_id == ds->device_id) {
+		DBG(11, priv, "Same device ID as active; allowing access.\n");
+		return TRUE;
+	}
+	else if (IsCursor(active) && IsTouch(priv)) {
+		/* Cursor devices are often left idle in range, so allow touch to
+		 * grab control if the tool has not been used for some time.
+		 */
+		return (ds->time - active->oldState.time > 100);
+	}
+	else if (IsTouch(active) && IsCursor(priv)) {
+		/* An otherwise idle cursor may still occasionally jitter and send
+		 * events while the user is making active touches. Do not allow
+		 * the cursor to grab control in this particular case.
+		 */
+		return FALSE;
+	}
+	else {
+		/* Non-touch input has priority over touch in general */
+		return !IsTouch(priv);
+	}
+}
+
 /*****************************************************************************
  * wcmEvent -
  *   Handles suppression, transformation, filtering, and event dispatch.
@@ -887,7 +891,9 @@ void wcmEvent(WacomCommonPtr common, unsigned int channel,
 	WacomDeviceState ds;
 	WacomChannelPtr pChannel;
 	enum WacomSuppressMode suppress;
-	WacomDevicePtr priv = common->wcmDevices;
+	InputInfoPtr pInfo;
+	WacomToolPtr tool;
+	WacomDevicePtr priv;
 	pChannel = common->wcmChannel + channel;
 	pLast = &pChannel->valid.state;
 
@@ -915,20 +921,25 @@ void wcmEvent(WacomCommonPtr common, unsigned int channel,
 		ds.proximity, ds.sample,
 		pChannel->nSamples);
 
-	/* touch device is needed for gesture later */
-	if ((ds.device_type == TOUCH_ID) && !IsTouch(priv) &&
-			TabletHasFeature(common, WCM_2FGT))
+	/* Find the device the current events are meant for */
+	tool = findTool(common, &ds);
+	if (!tool || !tool->device)
 	{
-
-		for (; priv != NULL && !IsTouch(priv); priv = priv->next);
-
-		if (priv == NULL || !IsTouch(priv))
-		{
-			priv = common->wcmDevices;
-			LogMessageVerbSigSafe(X_ERROR, 0, "could not find touch device "
-					      "for device on %s.\n", common->device_path);
-		}
+		DBG(11, common, "no device matches with id=%d, serial=%u\n",
+		    ds.device_type, ds.serial_num);
+		return;
 	}
+
+	/* Tool on the tablet when driver starts. This sometime causes
+	 * access errors to the device */
+	if (!tool->enabled) {
+		LogMessageVerbSigSafe(X_ERROR, 0, "tool not initialized yet. Skipping event. \n");
+		return;
+	}
+
+	pInfo = tool->device;
+	priv = pInfo->private;
+	DBG(11, common, "tool id=%d for %s\n", ds.device_type, pInfo->name);
 
 	if (TabletHasFeature(common, WCM_ROTATION) &&
 		TabletHasFeature(common, WCM_RING) &&
@@ -969,55 +980,38 @@ void wcmEvent(WacomCommonPtr common, unsigned int channel,
 	pChannel->valid.state = ds; /*save last raw sample */
 	if (pChannel->nSamples < common->wcmRawSample) ++pChannel->nSamples;
 
+	/* arbitrate pointer control */
+	if (check_arbitrated_control(pInfo, &ds)) {
+		if (WACOM_DRIVER.active != NULL && priv != WACOM_DRIVER.active) {
+			wcmSoftOutEvent(WACOM_DRIVER.active->pInfo);
+			wcmCancelGesture(WACOM_DRIVER.active->pInfo);
+		}
+		if (ds.proximity)
+			WACOM_DRIVER.active = priv;
+		else
+			WACOM_DRIVER.active = NULL;
+	}
+	else if (!IsPad(priv)) {
+		return;
+	}
+
 	if ((ds.device_type == TOUCH_ID) && common->wcmTouch)
 	{
 		wcmGestureFilter(priv, ds.serial_num - 1);
 #if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 16
-		/* When using XI 1.2 multitouch events don't do common dispatching */
-		if (!common->wcmGesture)
-		  return;
+		/*
+		 * When using XI 2.2 multitouch events don't do common dispatching
+		 * for direct touch devices
+		 */
+		if (!common->wcmGesture && TabletHasFeature(common, WCM_LCD))
+			return;
 #endif
 	}
+
 	/* For touch, only first finger moves the cursor */
 	if ((common->wcmTouch && ds.device_type == TOUCH_ID && ds.serial_num == 1) ||
 	    (ds.device_type != TOUCH_ID))
-		commonDispatchDevice(common,channel,pChannel, suppress);
-}
-
-/**
- * Find the device the current events are meant for. If multiple tools are
- * configured on this tablet, the one that matches the serial number for the
- * current device state is returned. If none match, the tool that has a
- * serial of 0 is returned.
- *
- * @param ds The current device state as read from the fd
- * @return The tool that should be used to emit the current events.
- */
-static WacomToolPtr findTool(const WacomCommonPtr common,
-			     const WacomDeviceState *ds)
-{
-	WacomToolPtr tooldefault = NULL;
-	WacomToolPtr tool = NULL;
-
-	/* 1: Find the tool (the one with correct serial or in second
-	 * hand, the one with serial set to 0 if no match with the
-	 * specified serial exists) that is used for this event */
-	for (tool = common->wcmTool; tool; tool = tool->next)
-	{
-		if (tool->typeid == ds->device_type)
-		{
-			if (tool->serial == ds->serial_num)
-				break;
-			else if (!tool->serial)
-				tooldefault = tool;
-		}
-	}
-
-	/* Use default tool (serial == 0) if no specific was found */
-	if (!tool)
-		tool = tooldefault;
-
-	return tool;
+		commonDispatchDevice(pInfo, pChannel, suppress);
 }
 
 
@@ -1036,13 +1030,13 @@ static WacomToolPtr findTool(const WacomCommonPtr common,
  *
  * @see normalizePressure
  */
-static int
+TEST_NON_STATIC int
 rebasePressure(const WacomDevicePtr priv, const WacomDeviceState *ds)
 {
 	int min_pressure;
 
 	/* set the minimum pressure when in prox */
-	if (!priv->oldProximity)
+	if (!priv->oldState.proximity)
 		min_pressure = ds->pressure;
 	else
 		min_pressure = min(priv->minPressure, ds->pressure);
@@ -1062,29 +1056,29 @@ rebasePressure(const WacomDevicePtr priv, const WacomDeviceState *ds)
  * @param priv The wacom device
  * @param ds Current device state
  *
- * @rebaes
+ * @return normalized pressure
  * @see rebasePressure
  */
-static int
-normalizePressure(const WacomDevicePtr priv, const WacomDeviceState *ds)
+TEST_NON_STATIC int
+normalizePressure(const WacomDevicePtr priv, const int raw_pressure)
 {
 	WacomCommonPtr common = priv->common;
 	double pressure;
-	int p = ds->pressure;
+	int p = raw_pressure;
+	int range_left = common->wcmMaxZ;
 
-	if (p < priv->minPressure)
-	{
-		LogMessageVerbSigSafe(X_ERROR, 0,
-				      "%s: Pressure %d lower than expected minimum %d. This is a bug.\n",
-				      priv->pInfo->name, ds->pressure, priv->minPressure);
-		p = priv->minPressure;
+	if (common->wcmPressureRecalibration) {
+		p -= priv->minPressure;
+		range_left -= priv->minPressure;
 	}
-
 	/* normalize pressure to 0..FILTER_PRESSURE_RES */
-	pressure = xf86ScaleAxis(p - priv->minPressure,
-				 FILTER_PRESSURE_RES, 0,
-				 common->wcmMaxZ - priv->minPressure,
-				 0);
+	if (range_left >= 1)
+		pressure = xf86ScaleAxis(p,
+					 FILTER_PRESSURE_RES, 0,
+					 range_left,
+					 0);
+	else
+		pressure = FILTER_PRESSURE_RES;
 
 	return (int)pressure;
 }
@@ -1097,24 +1091,24 @@ normalizePressure(const WacomDevicePtr priv, const WacomDeviceState *ds)
  * Returns the state of all buttons, but buttons other than button 1 are
  * unmodified.
  */
+#define PRESSURE_BUTTON 1
 static int
-setPressureButton(const WacomDevicePtr priv, const WacomDeviceState *ds)
+setPressureButton(const WacomDevicePtr priv, int buttons, const int pressure)
 {
 	WacomCommonPtr common = priv->common;
-	int button = 1;
-	int buttons = ds->buttons;
+	int button = PRESSURE_BUTTON;
 
 	/* button 1 Threshold test */
 	/* set button1 (left click) on/off */
-	if (ds->pressure < common->wcmThreshold)
+	if (pressure < common->wcmThreshold)
 	{
 		buttons &= ~button;
-		if (priv->oldButtons & button) /* left click was on */
+		if (priv->oldState.buttons & button) /* left click was on */
 		{
 			/* don't set it off if it is within the tolerance
 			   and threshold is larger than the tolerance */
 			if ((common->wcmThreshold > THRESHOLD_TOLERANCE) &&
-			    (ds->pressure > common->wcmThreshold - THRESHOLD_TOLERANCE))
+			    (pressure > common->wcmThreshold - THRESHOLD_TOLERANCE))
 				buttons |= button;
 		}
 	}
@@ -1124,15 +1118,54 @@ setPressureButton(const WacomDevicePtr priv, const WacomDeviceState *ds)
 	return buttons;
 }
 
-static void commonDispatchDevice(WacomCommonPtr common, unsigned int channel,
+/*
+ * Broken pen with a broken tip might give high pressure values
+ * all the time. We want to warn about this. To avoid getting
+ * spurious warnings when the tablet is hit quickly will wait
+ * until the device goes out of proximity and check if the minimum
+ * pressure is still above a threshold of 20 percent of the maximum
+ * pressure. Also we make sure the device has seen a sufficient number
+ * of events while in proximity that it had a chance to see decreasing
+ * pressure values.
+ */
+#define LIMIT_LOW_PRESSURE 20 /* percentage of max value */
+#define MIN_EVENT_COUNT 15
+
+static void detectPressureIssue(WacomDevicePtr priv,
+				WacomCommonPtr common,
+				WacomDeviceStatePtr ds)
+{
+	/* pen is just going out of proximity */
+	if (priv->oldState.proximity && !ds->proximity) {
+
+		int pressureThreshold = common->wcmMaxZ * LIMIT_LOW_PRESSURE / 100;
+		/* check if minPressure has persisted all the time
+		   and is too close to the maximum pressure */
+		if (priv->oldMinPressure > pressureThreshold &&
+		    priv->eventCnt > MIN_EVENT_COUNT)
+			LogMessageVerbSigSafe(
+				X_WARNING, 0,
+				"On %s(%d) a base pressure of %d persists while the pen is in proximity.\n"
+				"\tThis is > %d percent of the maximum value (%d).\n"
+				"\tThis indicates a worn out pen, it is time to change your tool. Also see:\n"
+				"\thttp://sourceforge.net/apps/mediawiki/linuxwacom/index.php?title=Pen_Wear.\n",
+				priv->pInfo->name, priv->serial, priv->minPressure, LIMIT_LOW_PRESSURE, common->wcmMaxZ);
+	} else if (!priv->oldState.proximity)
+		priv->eventCnt = 0;
+
+	priv->oldMinPressure = priv->minPressure;
+	priv->eventCnt++;
+}
+
+static void commonDispatchDevice(InputInfoPtr pInfo,
 				 const WacomChannelPtr pChannel,
 				 enum WacomSuppressMode suppress)
 {
-	InputInfoPtr pInfo = NULL;
-	WacomToolPtr tool = NULL;
 	WacomDeviceState* ds = &pChannel->valid.states[0];
-	WacomDevicePtr priv = NULL;
+	WacomDevicePtr priv = pInfo->private;
+	WacomCommonPtr common = priv->common;
 	WacomDeviceState filtered;
+	int raw_pressure = 0;
 
 	/* device_type should have been retrieved and set in the respective
 	 * models, wcmISDV4.c or wcmUSB.c. Once it comes here, something
@@ -1147,33 +1180,9 @@ static void commonDispatchDevice(WacomCommonPtr common, unsigned int channel,
 
 	DBG(10, common, "device type = %d\n", ds->device_type);
 
-	/* Find the device the current events are meant for */
-	tool = findTool(common, ds);
-	/* if a device matched criteria, handle filtering per device
-	 * settings, and send event to XInput */
-	if (!tool || !tool->device)
-	{
-		DBG(11, common, "no device matches with"
-				" id=%d, serial=%u\n",
-				ds->device_type, ds->serial_num);
-		return;
-	}
-
-	/* Tool on the tablet when driver starts. This sometime causes
-	 * access errors to the device */
-	if (!tool->enabled) {
-		LogMessageVerbSigSafe(X_ERROR, 0, "tool not initialized yet. Skipping event. \n");
-		return;
-	}
-
-	pInfo = tool->device;
-	DBG(11, common, "tool id=%d for %s\n", ds->device_type, pInfo->name);
-
 	filtered = pChannel->valid.state;
 
 	/* Device transformations come first */
-	priv = pInfo->private;
-
 	if (priv->serial && filtered.serial_num != priv->serial)
 	{
 		DBG(10, priv, "serial number"
@@ -1182,44 +1191,54 @@ static void commonDispatchDevice(WacomCommonPtr common, unsigned int channel,
 		return;
 	}
 
-	if (TabletHasFeature(common, WCM_PENTOUCH))
-	{
-		if (IsTablet(priv))
-		{
-			common->wcmTouchDevice->common->wcmPenInProx = filtered.proximity;
-
-			/* send touch out when tablet tool coming in-prox for
-			 * devices that provide both pen/puck and touch events
-			 * so system cursor won't jump between tools.
-			 */
-			if (common->wcmTouchDevice->oldProximity)
-			{
-				common->wcmGestureMode = 0;
-				wcmSoftOutEvent(common->wcmTouchDevice->pInfo);
-				return;
-			}
-		}
-		else if (IsTouch(priv) && common->wcmPenInProx)
-			/* Ignore touch events when tablet tool is in prox */
-			return;
-	}
-
 	if ((IsPen(priv) || IsTouch(priv)) && common->wcmMaxZ)
 	{
+		int prev_min_pressure = priv->oldState.proximity ? priv->minPressure : 0;
+
+		detectPressureIssue(priv, common, &filtered);
+
+		raw_pressure = filtered.pressure;
+		if (!priv->oldState.proximity)
+			priv->maxRawPressure = raw_pressure;
+
 		priv->minPressure = rebasePressure(priv, &filtered);
-		filtered.pressure = normalizePressure(priv, &filtered);
-		if (IsPen(priv))
-			filtered.buttons = setPressureButton(priv, &filtered);
+
+		filtered.pressure = normalizePressure(priv, filtered.pressure);
+		if (IsPen(priv)) {
+			filtered.buttons = setPressureButton(priv,
+							     filtered.buttons,
+							     filtered.pressure);
+
+			/* Here we run some heuristics to avoid losing button events if the
+			 * pen gets pushed onto the tablet so quickly that the first pressure
+			 * event read is non-zero and is thus interpreted as a pressure bias */
+			if (filtered.buttons & PRESSURE_BUTTON) {
+				/* If we triggered 'normally' reset max pressure to
+				 * avoid to trigger again while this device is in proximity */
+				priv->maxRawPressure = 0;
+			} else if (priv->maxRawPressure) {
+				int norm_max_pressure;
+
+				/* If we haven't triggered normally we record the maximal pressure
+				 * and see if this would have triggered with a lowered bias. */
+				if (priv->maxRawPressure < raw_pressure)
+					priv->maxRawPressure = raw_pressure;
+				norm_max_pressure = normalizePressure(priv, priv->maxRawPressure);
+				filtered.buttons = setPressureButton(priv, filtered.buttons,
+								     norm_max_pressure);
+
+				/* If minPressure is not decrementing any more or a button
+				 * press has been generated or minPressure has just become zero
+				 * reset maxRawPressure to avoid that worn devices
+				 * won't report a button release until going out of proximity */
+				if ((filtered.buttons & PRESSURE_BUTTON &&
+				     priv->minPressure == prev_min_pressure) ||
+				    !priv->minPressure)
+					priv->maxRawPressure = 0;
+
+			}
+		}
 		filtered.pressure = applyPressureCurve(priv,&filtered);
-	}
-	else if (IsCursor(priv) && !priv->oldCursorHwProx)
-	{
-		/* initial current max distance for Intuos series */
-		if ((TabletHasFeature(common, WCM_ROTATION)) ||
-				(TabletHasFeature(common, WCM_DUALINPUT)))
-			common->wcmMaxCursorDist = common->wcmMaxDist;
-		else
-			common->wcmMaxCursorDist = 0;
 	}
 
 	/* Store cursor hardware prox for next use */
@@ -1235,13 +1254,11 @@ static void commonDispatchDevice(WacomCommonPtr common, unsigned int channel,
 		/* To improve the accuracy of relative x/y,
 		 * don't send motion event when there is no movement.
 		 */
-		double deltx = filtered.x - priv->oldX;
-		double delty = filtered.y - priv->oldY;
-		deltx *= priv->factorX;
-		delty *= priv->factorY;
+		double deltx = filtered.x - priv->oldState.x;
+		double delty = filtered.y - priv->oldState.y;
 
 		/* less than one device coordinate movement? */
-		if (abs(deltx)<1 && abs(delty)<1)
+		if (fabs(deltx)<1 && fabs(delty)<1)
 		{
 			/* We have no other data in this event, skip */
 			if (suppress == SUPPRESS_NON_MOTION)
@@ -1251,28 +1268,23 @@ static void commonDispatchDevice(WacomCommonPtr common, unsigned int channel,
 			}
 
 			/* send other events, such as button/wheel */
-			filtered.x = priv->oldX;
-			filtered.y = priv->oldY;
+			filtered.x = priv->oldState.x;
+			filtered.y = priv->oldState.y;
 		}
 	}
 
 	/* force out-prox when distance is outside wcmCursorProxoutDist for pucks */
 	if (IsCursor(priv))
 	{
-		if (common->wcmProtocolLevel == WCM_PROTOCOL_5)
-		{
-			/* protocol 5 distance starts from the MaxDist
-			 * when getting in the prox.
-			 */
-			if (common->wcmMaxCursorDist > filtered.distance)
-				common->wcmMaxCursorDist = filtered.distance;
-		}
-		else
-		{
-			/* protocol 4 distance is 0 when getting in the prox */
-			if (common->wcmMaxCursorDist < filtered.distance)
-				common->wcmMaxCursorDist = filtered.distance;
-		}
+		/* Assume the the user clicks the puck buttons while
+		 * it is resting on the tablet. This works for both
+		 * tablets that have a normal distance scale (protocol
+		 * 5) as well as those with an inverted scale (protocol
+		 * 4 for many many kernel versions).
+		 */
+		if (filtered.buttons)
+			common->wcmMaxCursorDist = filtered.distance;
+
 		DBG(10, common, "Distance over"
 				" the tablet: %d, ProxoutDist: %d current"
 				" min/max %d hard prox: %d\n",
@@ -1281,21 +1293,23 @@ static void commonDispatchDevice(WacomCommonPtr common, unsigned int channel,
 				common->wcmMaxCursorDist,
 				ds->proximity);
 
-		if (priv->oldProximity)
-		{
-			if (abs(filtered.distance - common->wcmMaxCursorDist)
-					> common->wcmCursorProxoutDist)
-				filtered.proximity = 0;
-		}
-		/* once it is out. Don't let it in until a hard in */
-		/* or it gets inside wcmCursorProxoutDist */
-		else
-		{
-			if (abs(filtered.distance - common->wcmMaxCursorDist) >
-					common->wcmCursorProxoutDist && ds->proximity)
-				return;
-			if (!ds->proximity)
-				return;
+		if (common->wcmMaxCursorDist) {
+			if (priv->oldState.proximity)
+			{
+				if (abs(filtered.distance - common->wcmMaxCursorDist)
+						> common->wcmCursorProxoutDist)
+					filtered.proximity = 0;
+			}
+			/* once it is out. Don't let it in until a hard in */
+			/* or it gets inside wcmCursorProxoutDist */
+			else
+			{
+				if (abs(filtered.distance - common->wcmMaxCursorDist) >
+						common->wcmCursorProxoutDist && ds->proximity)
+					return;
+				if (!ds->proximity)
+					return;
+			}
 		}
 	}
 	wcmSendEvents(pInfo, &filtered);
@@ -1323,7 +1337,7 @@ int wcmInitTablet(InputInfoPtr pInfo, const char* id, float version)
 		return !Success;
 	
 	/* Default threshold value if not set */
-	if (common->wcmThreshold <= 0)
+	if (common->wcmThreshold <= 0 && IsPen(priv))
 	{
 		/* Threshold for counting pressure as a button */
 		common->wcmThreshold = DEFAULT_THRESHOLD;
@@ -1333,19 +1347,17 @@ int wcmInitTablet(InputInfoPtr pInfo, const char* id, float version)
 	}
 
 	/* output tablet state as probed */
-	if (TabletHasFeature(common, WCM_PEN))
-		xf86Msg(X_PROBED, "%s: Wacom %s tablet maxX=%d maxY=%d maxZ=%d "
+	if (IsPen(priv))
+		xf86Msg(X_PROBED, "%s: maxX=%d maxY=%d maxZ=%d "
 			"resX=%d resY=%d  tilt=%s\n",
 			pInfo->name,
-			model->name,
 			common->wcmMaxX, common->wcmMaxY, common->wcmMaxZ,
 			common->wcmResolX, common->wcmResolY,
 			HANDLE_TILT(common) ? "enabled" : "disabled");
-	else
-		xf86Msg(X_PROBED, "%s: Wacom %s tablet maxX=%d maxY=%d maxZ=%d "
+	else if (IsTouch(priv))
+		xf86Msg(X_PROBED, "%s: maxX=%d maxY=%d maxZ=%d "
 			"resX=%d resY=%d \n",
 			pInfo->name,
-			model->name,
 			common->wcmMaxTouchX, common->wcmMaxTouchY,
 			common->wcmMaxZ,
 			common->wcmTouchResolX, common->wcmTouchResolY);
@@ -1356,7 +1368,7 @@ int wcmInitTablet(InputInfoPtr pInfo, const char* id, float version)
 /* Send a soft prox-out event for the device */
 void wcmSoftOutEvent(InputInfoPtr pInfo)
 {
-	WacomDeviceState out = { 0 };
+	WacomDeviceState out = OUTPROX_STATE;
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 
 	out.device_type = DEVICE_ID(priv->flags);
@@ -1443,7 +1455,7 @@ WacomCommonPtr wcmNewCommon(void)
 			/* transmit position if increment is superior */
 	common->wcmRawSample = DEFAULT_SAMPLES;
 			/* number of raw data to be used to for filtering */
-
+	common->wcmPressureRecalibration = 1;
 	return common;
 }
 
@@ -1451,6 +1463,9 @@ WacomCommonPtr wcmNewCommon(void)
 void wcmFreeCommon(WacomCommonPtr *ptr)
 {
 	WacomCommonPtr common = *ptr;
+
+	if (!common)
+		return;
 
 	DBG(10, common, "common refcount dec to %d\n", common->refcnt - 1);
 	if (--common->refcnt == 0)
@@ -1464,6 +1479,7 @@ void wcmFreeCommon(WacomCommonPtr *ptr)
 					common->serials->serial,
 					common->serials->name);
 
+			free(common->serials->name);
 			next = common->serials->next;
 			free(common->serials);
 			common->serials = next;
