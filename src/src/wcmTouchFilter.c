@@ -201,7 +201,7 @@ static void wcmSingleFingerTap(WacomDevicePtr priv)
 			common->wcmGestureMode = GESTURE_PREDRAG_MODE;
 
 			/* Delay to detect possible drag operation */
-			TimerSet(NULL, 0, common->wcmGestureParameters.wcmTapTime, wcmSingleFingerTapTimer, priv);
+			TimerSet(priv->tap_timer, 0, common->wcmGestureParameters.wcmTapTime, wcmSingleFingerTapTimer, priv);
 		}
 	}
 }
@@ -248,7 +248,7 @@ void wcmGestureFilter(WacomDevicePtr priv, int channel)
 	if (!IsTouch(priv))
 	{
 		/* this should never happen */
-		xf86Msg(X_ERROR, "WACOM: No touch device found for %s \n",
+		LogMessageVerbSigSafe(X_ERROR, 0, "WACOM: No touch device found for %s \n",
 			 common->device_path);
 		return;
 	}

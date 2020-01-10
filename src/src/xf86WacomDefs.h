@@ -183,13 +183,12 @@ struct _WacomModel
 #define IsUSBDevice(common) ((common)->wcmDevCls == &gWacomUSBDevice)
 
 #define FILTER_PRESSURE_RES	2048	/* maximum points in pressure curve */
+/* Tested result for setting the pressure threshold to a reasonable value */
+#define THRESHOLD_TOLERANCE (FILTER_PRESSURE_RES / 125)
+#define DEFAULT_THRESHOLD (FILTER_PRESSURE_RES / 75)
+
 #define WCM_MAX_BUTTONS		32	/* maximum number of tablet buttons */
-#define WCM_MAX_MOUSE_BUTTONS	16	/* maximum number of buttons-on-pointer
-                                         * (which are treated as mouse buttons,
-                                         * not as keys like tablet menu buttons). 
-					 * For backward compability support,
-					 * tablet buttons besides the strips are
-					 * treated as buttons */
+
 #define AXIS_INVERT  0x01               /* Flag describing an axis which increases "downward" */
 #define AXIS_BITWISE 0x02               /* Flag describing an axis which changes bitwise */
 
@@ -227,6 +226,7 @@ struct _WacomDeviceRec
 	double factorY;		/* Y factor */
 	unsigned int serial;	/* device serial number this device takes (if 0, any serial is ok) */
 	unsigned int cur_serial; /* current serial in prox */
+	int cur_device_id;	/* current device ID in prox */
 	int maxWidth;		/* max active screen width in screen coords */
 	int maxHeight;		/* max active screen height in screen coords */
 	int leftPadding;	/* left padding for virtual tablet in device coordinates*/
@@ -299,10 +299,11 @@ struct _WacomDeviceRec
 
 	/* property handlers to listen to for action properties */
 	Atom btn_actions[WCM_MAX_BUTTONS];
-	Atom wheel_actions[4];
+	Atom wheel_actions[6];
 	Atom strip_actions[4];
 
 	OsTimerPtr serial_timer; /* timer used for serial number property update */
+	OsTimerPtr tap_timer;   /* timer used for tap timing */
 };
 
 /******************************************************************************
@@ -411,7 +412,7 @@ enum WacomProtocol {
 struct _WacomCommonRec 
 {
 	/* Do not move device_path, same offset as priv->name. Used by DBG macro */
-	char* device_path;           /* device file name */
+	const char* device_path;    /* device file name */
 	dev_t min_maj;               /* minor/major number */
 	unsigned char wcmFlags;     /* various flags (handle tilt) */
 	int debugLevel;
@@ -443,10 +444,6 @@ struct _WacomCommonRec
 
 	int wcmMaxStripX;            /* Maximum fingerstrip X */
 	int wcmMaxStripY;            /* Maximum fingerstrip Y */
-
-	int nbuttons;                /* total number of buttons */
-	int padkey_code[WCM_MAX_BUTTONS];/* hardware codes for buttons */
-	int npadkeys;                /* number of pad keys in the above array */
 
 	WacomDevicePtr wcmDevices;   /* list of devices sharing same port */
 	int wcmPktLength;            /* length of a packet */

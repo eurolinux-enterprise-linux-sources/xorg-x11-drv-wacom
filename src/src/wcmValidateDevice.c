@@ -33,15 +33,11 @@
 static Bool wcmCheckSource(InputInfoPtr pInfo, dev_t min_maj)
 {
 	int match = 0;
-	char* device;
-	char* fsource = xf86CheckStrOption(pInfo->options, "_source", "");
 	InputInfoPtr pDevices = xf86FirstLocalDevice();
-	WacomCommonPtr pCommon = NULL;
-	char* psource;
 
 	for (; pDevices != NULL; pDevices = pDevices->next)
 	{
-		device = xf86CheckStrOption(pDevices->options, "Device", NULL);
+		char* device = xf86CheckStrOption(pDevices->options, "Device", NULL);
 
 		/* device can be NULL on some distros */
 		if (!device || !strstr(pDevices->drv->driverName, "wacom"))
@@ -49,14 +45,17 @@ static Bool wcmCheckSource(InputInfoPtr pInfo, dev_t min_maj)
 
 		if (pInfo != pDevices)
 		{
-			psource = xf86CheckStrOption(pDevices->options, "_source", "");
-			pCommon = ((WacomDevicePtr)pDevices->private)->common;
+			WacomCommonPtr pCommon = ((WacomDevicePtr)pDevices->private)->common;
+			char* fsource = xf86CheckStrOption(pInfo->options, "_source", NULL);
+			char* psource = xf86CheckStrOption(pDevices->options, "_source", NULL);
+
 			if (pCommon->min_maj &&
 				pCommon->min_maj == min_maj)
 			{
 				/* only add the new tool if the matching major/minor
 				* was from the same source */
-				if (strcmp(fsource, psource))
+				if ((!fsource && !psource) ||
+				    (fsource && psource && strcmp(fsource, psource)))
 				{
 					match = 1;
 					break;
@@ -78,14 +77,14 @@ static Bool wcmCheckSource(InputInfoPtr pInfo, dev_t min_maj)
  * the xorg.conf and is then hotplugged through the server backend (HAL,
  * udev). In this case, the hotplugged one fails.
  */
-int wcmIsDuplicate(char* device, InputInfoPtr pInfo)
+int wcmIsDuplicate(const char* device, InputInfoPtr pInfo)
 {
 	struct stat st;
 	int isInUse = 0;
-	char* lsource = xf86CheckStrOption(pInfo->options, "_source", "");
+	char* lsource = xf86CheckStrOption(pInfo->options, "_source", NULL);
 
 	/* always allow xorg.conf defined tools to be added */
-	if (!strlen(lsource)) goto ret;
+	if (!lsource || !strlen(lsource)) goto ret;
 
 	if (stat(device, &st) == -1)
 	{
@@ -136,7 +135,7 @@ Bool wcmIsAValidType(InputInfoPtr pInfo, const char* type)
 	int j, k, ret = FALSE;
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
 	WacomCommonPtr common = priv->common;
-	char* dsource = xf86CheckStrOption(pInfo->options, "_source", "");
+	char* dsource = xf86CheckStrOption(pInfo->options, "_source", NULL);
 
 	if (!type)
 	{
@@ -163,7 +162,7 @@ Bool wcmIsAValidType(InputInfoPtr pInfo, const char* type)
 						    ret = FALSE;
 					}
 				}
-				else if (!strlen(dsource)) /* an user defined type */
+				else if (!dsource || !strlen(dsource)) /* an user defined type */
 				{
 					/* assume it is a valid type */
 					SETBIT(common->wcmKeys, wcmType[j].tool[k]);
@@ -192,9 +191,14 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 	switch (priv->common->tablet_id)
 	{
 		case 0xF4:  /* Cintiq 24HD */
-			TabletSetFeature(priv->common, WCM_DUALRING);
+			TabletSetFeature(priv->common, WCM_DUALRING | WCM_LCD);
 			/* fall through */
 
+		case 0x26:  /* I5 */
+		case 0x27:  /* I5 */
+		case 0x28:  /* I5 */
+		case 0x29:  /* I5 */
+		case 0x2A:  /* I5 */
 		case 0xB8:  /* I4 */
 		case 0xB9:  /* I4 */
 		case 0xBA:  /* I4 */
@@ -235,6 +239,7 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 		case 0x37:  /* PL700 */
 		case 0x38:  /* PL510 */
 		case 0x39:  /* PL710 */
+		case 0x3A:  /* DTI520 */
 		case 0xC0:  /* DTF720 */
 		case 0xC2:  /* DTF720a */
 		case 0xC4:  /* DTF521 */
@@ -249,6 +254,7 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 		case 0xC5:  /* CintiqV5 */
 		case 0xC6:  /* CintiqV5 */
 		case 0xCC:  /* CinitqV5 */
+		case 0xFA:  /* Cintiq 22HD */
 			TabletSetFeature(priv->common, WCM_LCD);
 			/* fall through */
 		case 0xB0:  /* I3 */
@@ -264,13 +270,12 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 		case 0xE2: /* TPC with 2FGT */
 		case 0xE3: /* TPC with 2FGT */
 		case 0xE6: /* TPC with 2FGT */
-			TabletSetFeature(priv->common, WCM_TPC);
-			break;
-
 		case 0x93: /* TPC with 1FGT */
 		case 0x9A: /* TPC with 1FGT */
+		case 0xED: /* TPC with 1FGT */
 		case 0x90: /* TPC */
 		case 0x97: /* TPC */
+		case 0xEF: /* TPC */
 			TabletSetFeature(priv->common, WCM_TPC);
 			break;
 
@@ -566,13 +571,13 @@ void wcmHotplugOthers(InputInfoPtr pInfo, const char *basename)
  */
 int wcmNeedAutoHotplug(InputInfoPtr pInfo, const char **type)
 {
-	char *source = xf86CheckStrOption(pInfo->options, "_source", "");
+	char *source = xf86CheckStrOption(pInfo->options, "_source", NULL);
 	int i;
 
 	if (*type) /* type specified, don't hotplug */
 		return 0;
 
-	if (strcmp(source, "server/hal") && strcmp(source, "server/udev"))
+	if (source && strcmp(source, "server/hal") && strcmp(source, "server/udev"))
 		return 0;
 
 	/* no type specified, so we need to pick the first one applicable
@@ -630,6 +635,7 @@ int wcmParseSerials (InputInfoPtr pInfo)
 			{
 				xf86Msg(X_ERROR, "%s: %s is invalid serial string.\n",
 					pInfo->name, tok);
+				free(ser);
 				return 1;
 			}
 
@@ -699,7 +705,7 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 {
 	WacomDevicePtr  priv = (WacomDevicePtr)pInfo->private;
 	WacomCommonPtr  common = priv->common;
-	char            *s, b[12];
+	char            *s;
 	int		i;
 	WacomToolPtr    tool = NULL;
 	int		tpc_button_is_on;
@@ -916,6 +922,7 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 
 	for (i=0; i<WCM_MAX_BUTTONS; i++)
 	{
+		char b[12];
 		sprintf(b, "Button%d", i+1);
 		priv->button[i] = xf86SetIntOption(pInfo->options, b, priv->button[i]);
 	}

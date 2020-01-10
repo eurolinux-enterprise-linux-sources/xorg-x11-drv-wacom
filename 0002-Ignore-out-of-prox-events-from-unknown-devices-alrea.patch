@@ -1,0 +1,42 @@
+From 0fe7f800295a4b5bf074bca798cf8024fcb174ec Mon Sep 17 00:00:00 2001
+From: Jason Gerecke <killertofu@gmail.com>
+Date: Thu, 13 Sep 2012 16:59:01 -0700
+Subject: [PATCH] Ignore out-of-prox events from unknown devices already
+ out-of-prox
+
+Fixes an issue with the Intuos5, which sends extra out-of-prox
+notifications when the ExpressKeys are touched. This causes the driver
+to ask the kernel for the tool currently in prox and post an empty event
+for it. The result is a cursor that (only while the pen is in prox)
+sometimes jumps to the top left when touching the buttons.
+
+We fix this by ignoring events that claim to be leaving prox when the
+tool is already supposedly out of prox.
+
+https://bugs.freedesktop.org/show_bug.cgi?id=54250
+
+Reported-by: Timo Aaltonen <tjaalton@ubuntu.com>
+Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+---
+ src/wcmUSB.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index f25116b..4fc186a 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -1657,6 +1657,11 @@ static void usbDispatchEvents(InputInfoPtr pInfo)
+ 		unsigned long keys[NBITS(KEY_MAX)] = { 0 };
+ 		int rc;
+ 
++		if (!ds->proximity) {
++			DBG(3, common, "Unknown out-of-prox device leaving prox. Ignoring.\n");
++			return;
++		}
++
+ 		/* Retrieve the type by asking a resend from the kernel */
+ 		rc = ioctl(common->fd, EVIOCGKEY(sizeof(keys)), keys);
+ 		if (rc == -1)
+-- 
+1.7.11.4
+

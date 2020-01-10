@@ -102,6 +102,7 @@ static int wcmAllocate(InputInfoPtr pInfo)
 
 	/* timers */
 	priv->serial_timer = TimerSet(NULL, 0, 0, NULL, NULL);
+	priv->tap_timer = TimerSet(NULL, 0, 0, NULL, NULL);
 
 	return 1;
 
@@ -125,6 +126,7 @@ static void wcmFree(InputInfoPtr pInfo)
 		return;
 
 	TimerFree(priv->serial_timer);
+	TimerFree(priv->tap_timer);
 	free(priv->tool);
 	wcmFreeCommon(&priv->common);
 	free(priv);
@@ -207,7 +209,7 @@ int wcmGetPhyDeviceID(WacomDevicePtr priv)
  * starts making sense again.
  */
 
-static char *default_options[] =
+static const char *default_options[] =
 {
 	"StopBits",    "1",
 	"DataBits",    "8",
@@ -225,10 +227,12 @@ static void wcmUninit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 	WacomDevicePtr dev;
 	WacomDevicePtr *prev;
-	WacomCommonPtr common = priv->common;
+	WacomCommonPtr common;
 
 	if (!priv)
 		goto out;
+
+	common = priv->common;
 
 	DBG(1, priv, "\n");
 
@@ -437,8 +441,8 @@ static void wcmLinkTouchAndPen(InputInfoPtr pInfo)
  */
 static int wcmIsHotpluggedDevice(InputInfoPtr pInfo)
 {
-	char *source = xf86CheckStrOption(pInfo->options, "_source", "");
-	return !strcmp(source, "_driver/wacom");
+	char *source = xf86CheckStrOption(pInfo->options, "_source", NULL);
+	return (!source || !strcmp(source, "_driver/wacom"));
 }
 
 /* wcmPreInit - called for each input devices with the driver set to
@@ -479,7 +483,7 @@ static int wcmPreInit(InputDriverPtr drv, InputInfoPtr pInfo, int flags)
 	WacomDevicePtr priv = NULL;
 	WacomCommonPtr common = NULL;
 	const char*	type;
-	char*		device, *oldname;
+	const char*	device, *oldname;
 	int		need_hotplug = 0, is_dependent = 0;
 
 	gWacomModule.wcmDrv = drv;

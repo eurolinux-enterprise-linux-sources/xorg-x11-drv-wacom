@@ -380,8 +380,8 @@ static param_t parameters[] =
 		.set_func = set_xydefault,
 	},
 	{
-		.name = "ToolID",
-		.desc = "Returns the ID of the associated device. ",
+		.name = "ToolType",
+		.desc = "Returns the tool type of the associated device. ",
 		.prop_name = WACOM_PROP_TOOL_TYPE,
 		.prop_format = 32,
 		.prop_offset = 0,
@@ -394,6 +394,15 @@ static param_t parameters[] =
 		.prop_name = WACOM_PROP_SERIALIDS,
 		.prop_format = 32,
 		.prop_offset = 3,
+		.arg_count = 1,
+		.prop_flags = PROP_FLAG_READONLY
+	},
+	{
+		.name = "ToolID",
+		.desc = "Returns the tool ID of the current tool in proximity.",
+		.prop_name = WACOM_PROP_SERIALIDS,
+		.prop_format = 32,
+		.prop_offset = 4,
 		.arg_count = 1,
 		.prop_flags = PROP_FLAG_READONLY
 	},
@@ -1235,7 +1244,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 				AnyPropertyType, &type, &format, &btnact_nitems,
 				&bytes_after, (unsigned char**)&btnact_data);
 
-	if (offset > btnact_nitems)
+	if (offset >= btnact_nitems)
 	{
 		fprintf(stderr, "Invalid offset into %s property.\n", XGetAtomName(dpy, btnact_prop));
 		goto out;
@@ -1255,7 +1264,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 		if (!prop)
 		{
 			char buff[64];
-			sprintf(buff, "Wacom button action %d", (offset + 1));
+			sprintf(buff, "%s action %d", XGetAtomName(dpy, btnact_prop), (offset + 1));
 			prop = XInternAtom(dpy, buff, False);
 			btnact_data[offset] = prop;
 		}
@@ -1532,8 +1541,8 @@ static void set(Display *dpy, int argc, char **argv)
 	long *n;
 	char *b;
 	int i;
-	char **values;
-	int nvals;
+	char **values = NULL;
+	int nvals = 0;
 
 	if (argc < 2)
 	{
@@ -1638,10 +1647,10 @@ static void set(Display *dpy, int argc, char **argv)
 				PropModeReplace, data, nitems);
 	XFlush(dpy);
 
+out:
 	for (i = 0; i < nvals; i++)
 		free(values[i]);
 	free(values);
-out:
 	XCloseDevice(dpy, dev);
 	free(data);
 }
@@ -2347,7 +2356,6 @@ static void set_output(Display *dpy, XDevice *dev, param_t *param, int argc, cha
 	int x, y;
 	unsigned int width, height;
 	int flags = XParseGeometry(argv[0], &x, &y, &width, &height);
-	Bool success = False;
 
 	if (argc != param->arg_count)
 	{
@@ -2357,15 +2365,15 @@ static void set_output(Display *dpy, XDevice *dev, param_t *param, int argc, cha
 	}
 
 	if (MaskIsSet(flags, XValue|YValue|WidthValue|HeightValue))
-		success = set_output_area(dpy, dev, x, y, width, height);
+		set_output_area(dpy, dev, x, y, width, height);
 	else if (strcasecmp(argv[0], "next") == 0)
-		success = set_output_next(dpy, dev);
+		set_output_next(dpy, dev);
 	else if (strcasecmp(argv[0], "desktop") == 0)
-		success = set_output_desktop(dpy, dev);
+		set_output_desktop(dpy, dev);
 	else if (!need_xinerama(dpy))
-		success = set_output_xrandr(dpy, dev, argv[0]);
+		set_output_xrandr(dpy, dev, argv[0]);
 	else if  (convert_value_from_user(param, argv[0], &head_no))
-		success = set_output_xinerama(dpy, dev, head_no);
+		set_output_xinerama(dpy, dev, head_no);
 	else
 		fprintf(stderr, "Unable to find an output '%s'.\n", argv[0]);
 }
@@ -2689,7 +2697,7 @@ static void test_parameter_number(void)
 	 * deprecated them.
 	 * Numbers include trailing NULL entry.
 	 */
-	assert(ARRAY_SIZE(parameters) == 36);
+	assert(ARRAY_SIZE(parameters) == 37);
 	assert(ARRAY_SIZE(deprecated_parameters) == 17);
 }
 

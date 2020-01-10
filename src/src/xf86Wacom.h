@@ -37,6 +37,11 @@
 #include <xf86Xinput.h>
 #include <mipointer.h>
 #include <X11/Xatom.h>
+
+#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) < 18
+#define LogMessageVerbSigSafe xf86MsgVerb
+#endif
+
 /*****************************************************************************
  * Unit test hack
  ****************************************************************************/
@@ -56,9 +61,9 @@
 #define DBG(lvl, priv, ...) \
 	do { \
 		if ((lvl) <= priv->debugLevel) { \
-			xf86Msg(X_INFO, "%s (%d:%s): ", \
+			LogMessageVerbSigSafe(X_INFO, -1, "%s (%d:%s): ", \
 				((WacomDeviceRec*)priv)->name, lvl, __func__); \
-			xf86Msg(X_NONE, __VA_ARGS__); \
+			LogMessageVerbSigSafe(X_NONE, -1, __VA_ARGS__); \
 		} \
 	} while (0)
 #else
@@ -107,7 +112,7 @@ struct _WacomModule
 extern Bool wcmOpen(InputInfoPtr pInfo);
 
 /* device autoprobing */
-char *wcmEventAutoDevProbe (InputInfoPtr pInfo);
+const char *wcmEventAutoDevProbe (InputInfoPtr pInfo);
 
 /* common tablet initialization regime */
 int wcmInitTablet(InputInfoPtr pInfo, const char* id, float version);
@@ -131,7 +136,7 @@ void wcmMappingFactor(InputInfoPtr pInfo);
 /* validation */
 extern Bool wcmIsAValidType(InputInfoPtr pInfo, const char* type);
 extern Bool wcmIsWacomDevice (char* fname);
-extern int wcmIsDuplicate(char* device, InputInfoPtr pInfo);
+extern int wcmIsDuplicate(const char* device, InputInfoPtr pInfo);
 extern int wcmDeviceTypeKeys(InputInfoPtr pInfo);
 
 /* hotplug */
@@ -143,7 +148,6 @@ extern Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary, Bool is_
 extern Bool wcmPostInitParseOptions(InputInfoPtr pInfo, Bool is_primary, Bool is_dependent);
 extern int wcmParseSerials(InputInfoPtr pinfo);
 extern void wcmInitialCoordinates(InputInfoPtr pInfo, int axes);
-extern void wcmInitialScreens(InputInfoPtr pInfo);
 extern void wcmInitialScreens(InputInfoPtr pInfo);
 
 extern int wcmDevSwitchModeCall(InputInfoPtr pInfo, int mode);
@@ -169,7 +173,7 @@ extern int wcmGetProperty(DeviceIntPtr dev, Atom property);
 extern int wcmDeleteProperty(DeviceIntPtr dev, Atom property);
 extern void InitWcmDeviceProperties(InputInfoPtr pInfo);
 extern void wcmUpdateRotationProperty(WacomDevicePtr priv);
-extern void wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial);
+extern void wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial, int id);
 
 /* Utility functions */
 extern Bool is_absolute(InputInfoPtr pInfo);

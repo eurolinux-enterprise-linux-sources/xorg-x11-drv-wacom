@@ -28,10 +28,6 @@
 #include <xkbsrv.h>
 #include <xf86_OSproc.h>
 
-/* Tested result for setting the pressure threshold to a reasonable value */
-#define THRESHOLD_TOLERANCE (FILTER_PRESSURE_RES / 125)
-#define DEFAULT_THRESHOLD (FILTER_PRESSURE_RES / 75)
-
 /* X servers pre 1.9 didn't copy data passed into xf86Post*Event.
  * Data passed in would be modified, requiring the driver to copy the
  * data beforehand.
@@ -298,10 +294,9 @@ static void sendAButton(InputInfoPtr pInfo, int button, int mask,
 	mapped_button = priv->button[button];
 
 	DBG(4, priv, "TPCButton(%s) button=%d state=%d "
-		"mapped_button=%d, coreEvent=%s \n",
+		"mapped_button=%d\n",
 		common->wcmTPCButton ? "on" : "off",
-		button, mask, mapped_button,
-		(mapped_button & AC_CORE) ? "yes" : "no");
+		button, mask, mapped_button);
 
 	if (!priv->keys[mapped_button][0])
 	{
@@ -335,9 +330,9 @@ static int getScrollDelta(int current, int old, int wrap, int flags)
 
 	if (flags & AXIS_BITWISE)
 	{
-		current = (int)log2((current << 1) | 0x01);
-		old = (int)log2((old << 1) | 0x01);
-		wrap = (int)log2((wrap << 1) | 0x01);
+		current = log2((current << 1) | 0x01);
+		old = log2((old << 1) | 0x01);
+		wrap = log2((wrap << 1) | 0x01);
 	}
 
 	delta = current - old;
@@ -454,7 +449,7 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 
 	/* emulate events for relative wheel */
 	delta = getScrollDelta(ds->relwheel, 0, 0, 0);
-	if (delta && IsCursor(priv) && priv->oldProximity == ds->proximity)
+	if (delta && (IsCursor(priv) || IsPad(priv)) && priv->oldProximity == ds->proximity)
 	{
 		DBG(10, priv, "Relative wheel scroll delta = %d\n", delta);
 		fakeButton = getWheelButton(delta, priv->relup, priv->reldn,
@@ -734,8 +729,8 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 		return;
 	}
 
-	if (priv->cur_serial != serial)
-		wcmUpdateSerial(pInfo, serial);
+	if (priv->cur_serial != serial || priv->cur_device_id != id)
+		wcmUpdateSerial(pInfo, serial, id);
 
 	/* don't move the cursor when going out-prox */
 	if (!ds->proximity)
@@ -837,7 +832,7 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 		priv->devReverseCount = 0;
 		priv->old_serial = serial;
 		priv->old_device_id = id;
-		wcmUpdateSerial(pInfo, 0);
+		wcmUpdateSerial(pInfo, 0, 0);
 	}
 }
 
@@ -965,8 +960,8 @@ void wcmEvent(WacomCommonPtr common, unsigned int channel,
 		if (priv == NULL || !IsTouch(priv))
 		{
 			priv = common->wcmDevices;
-			xf86Msg(X_ERROR, "could not find touch device "
-				"for device on %s.\n", common->device_path);
+			LogMessageVerbSigSafe(X_ERROR, 0, "could not find touch device "
+					      "for device on %s.\n", common->device_path);
 		}
 	}
 
@@ -1108,8 +1103,9 @@ normalizePressure(const WacomDevicePtr priv, const WacomDeviceState *ds)
 
 	if (p < priv->minPressure)
 	{
-		xf86Msg(X_ERROR, "%s: Pressure %d lower than expected minimum %d. This is a bug.\n",
-			priv->pInfo->name, ds->pressure, priv->minPressure);
+		LogMessageVerbSigSafe(X_ERROR, 0,
+				      "%s: Pressure %d lower than expected minimum %d. This is a bug.\n",
+				      priv->pInfo->name, ds->pressure, priv->minPressure);
 		p = priv->minPressure;
 	}
 
@@ -1195,7 +1191,7 @@ static void commonDispatchDevice(WacomCommonPtr common, unsigned int channel,
 	/* Tool on the tablet when driver starts. This sometime causes
 	 * access errors to the device */
 	if (!tool->enabled) {
-		xf86Msg(X_ERROR, "tool not initialized yet. Skipping event. \n");
+		LogMessageVerbSigSafe(X_ERROR, 0, "tool not initialized yet. Skipping event. \n");
 		return;
 	}
 
@@ -1455,9 +1451,10 @@ WacomCommonPtr wcmNewCommon(void)
 {
 	WacomCommonPtr common;
 	common = calloc(1, sizeof(WacomCommonRec));
-	if (common)
-		common->refcnt = 1;
+	if (!common)
+		return NULL;;
 
+	common->refcnt = 1;
 	common->wcmFlags = 0;               /* various flags */
 	common->wcmProtocolLevel = WCM_PROTOCOL_4; /* protocol level */
 	common->wcmTPCButton = 0;          /* set Tablet PC button on/off */

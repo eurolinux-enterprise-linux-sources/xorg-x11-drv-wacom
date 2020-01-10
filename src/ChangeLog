@@ -1,3 +1,860 @@
+commit 76e5effa46139a3ff4c9bb0d70c51f3fc3267f85
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Aug 23 15:20:40 2012 +1000
+
+    wacom 0.16.1
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 693de7ecadd6969e1e7c3e84def3a8571218a541
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Jul 10 09:29:01 2012 -0700
+
+    Set WCM_LCD on the Cintiq 24HD
+    
+    This flag was apparently forgotten when the 24HD was originally
+    added.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    (cherry picked from commit 58d2a675b616af9e575f0bc0dcec7950a5498c9d)
+
+commit 0ad33ac702efa42293c8153370c48fe4c05d29c8
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Aug 23 09:03:34 2012 +1000
+
+    Pre-allocate the tap timer
+    
+    wcmSingleFingerTap() is called during SIGIO, calling TimerSet(NULL, ...)
+    will malloc inside the signal handler and hang the box.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Chris Bagwell <chris@cnpbagwell.com>
+    (cherry picked from commit ac17300d842f2842eff3a2b2aa3dbac7ebf88a2b)
+
+commit e4c1af418fbfa615e7a34fdcf34a4a5083b41925
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Aug 20 12:14:28 2012 +1000
+
+    Log debug messages in signal-safe manner
+    
+    This is a rather broad brush, logging all messages in DBG() through the
+    signal-safe interface instead of just the ones that really need it.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+    (cherry picked from commit f4cf73dccf0bf9913c7fdd4e346f4dddefe493f0)
+
+commit 8d5b61c37dbe30b80118c1f00df0a08de5c87b1c
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue May 29 16:51:00 2012 +1000
+
+    Use signal-safe logging patches where necessary
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+    (cherry picked from commit 7ac6e9b7f5441ff9fbe4902940209e9e2c2f1310)
+
+commit 463d56aa4b82f9eda2be739478f111d52c5303b1
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Thu Jul 12 17:23:00 2012 -0700
+
+    Add Cintiq 22HD
+    
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    (cherry picked from commit 1a8db01e896514d06f7a69c647aac05832d54ea7)
+
+commit f5b89e44aa70d5297330014694c04d46f6e96a72
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jul 9 09:56:54 2012 -0700
+
+    wacom 0.16.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 35ba79a91257e9da5c8d749be382ec1841c78057
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jun 27 15:25:45 2012 -0700
+
+    wacom 0.15.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit ed550599a71defd879ef6a660ab64db5f2961394
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jun 27 11:07:39 2012 -0700
+
+    Cleanup wcmInitAxes
+    
+    No functional change.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 6bf3c65d44ce343bf8d2f0d0f1bb9bc86aba3fe1
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Jun 27 11:00:44 2012 -0700
+
+    Provide consistent 'filler' axes to X
+    
+    Axes which aren't used by specific devices 'leak' some of the
+    settings of the prior axis while creating the necessary 'filler'
+    axis. This patch resets the variables to their proper defaults
+    for each valuator's initialization.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 1e14dda8a512b90cf9dd5d830d1e1257e80651c4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 22 12:44:47 2012 -0700
+
+    Create a wrapper for InitValuatorAxisStruct
+    
+    wcmInitAxes calls InitValuatorAxisStruct seven times, with each
+    call requring two ifdefs each. To keep this function readable,
+    this patch adds a wrapper function that centralizes all that
+    ifdef uglyness into a single spot.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 00560b81d700d04518beef9cf5bfa7c58b4a8d51
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 25 12:21:44 2012 -0700
+
+    Find mouse buttons on pad devices if no generic buttons found
+    
+    Devices like the Graphire4 and Bamboo-series have Pad buttons
+    which emit "mouse button" events (e.g. BTN_FORWARD) instead of
+    the usual "generic button" events (e.g. BTN_0). Currently, the
+    code considers the former to be valid for the Pad device only
+    if the tablet doesn't also support a Cursor device. Devices
+    with mouse buttons on the Pad *and* have a Cursor device
+    (like the Graphire4 and very early Bamboos) end up declaring
+    zero Pad buttons because of this, causing us to allocate
+    an insufficient number of actions and thereby prevent the
+    re-mapping of their forward and back buttons.
+    
+    This patch changes the condition from "no Cursor device exists"
+    to "no generic buttons exist". In theory this can result in the
+    Pad claiming it has buttons when none physically exist, but it
+    shouldn't result in any problems.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Acked-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 23b704aab02903954a2184708dcecf42ad896ac9
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Jun 22 16:04:45 2012 +1000
+
+    xsetwacom: fix leak in set()
+    
+    move out: statement up to make sure we free values on error as well.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit bef544bef0be59f9fdff9231ce85cd41e4149975
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri May 25 10:09:37 2012 -0700
+
+    Re-enable relative wheel scrolling from pad devices
+    
+    Commit 477a261e does not handle the case where relative wheel events
+    come from a pad device. The Graphire4 produces such events, with the
+    result that scrolling with one has been broken ever since.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 6973a8e0256ba2b2d84ce73058da23b2fd1668c6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 11:16:03 2012 -0700
+
+    Align returned type of wcmEventAutoDevProbe with expected type
+    
+    There's some cognitive dissonance when reading "return FALSE"
+    in a function that returns a pointer (despite FALSE and NULL
+    being equivalent).
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit fb22158f3361afa68808a10e2eece00617921faf
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:31:25 2012 -0700
+
+    Fix warning: Re-scope variable in wcmPreInitParseOptions
+    
+    ../src/wcmValidateDevice.c: In function 'wcmPreInitParseOptions':
+    ../src/wcmValidateDevice.c:801:9: warning: declaration of 'b' shadows a previous local [-Wshadow]
+    ../src/wcmValidateDevice.c:708:22: warning: shadowed declaration is here [-Wshadow]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 19681d6a8bb0a4dbcf5fb9174d79ea6232ac895a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:02:09 2012 -0700
+
+    Fix warning: Remove variable re-definition in wcmSerialValidate
+    
+    ../src/wcmISDV4.c: In function 'wcmSerialValidate':
+    ../src/wcmISDV4.c:167:7: warning: declaration of 'n' shadows a previous local [-Wshadow]
+    ../src/wcmISDV4.c:161:6: warning: shadowed declaration is here [-Wshadow]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit def7b5fd2776b0455eca09641df8ed1c5e17bd37
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri May 25 12:18:05 2012 -0700
+
+    Fix warning: Swap empty string for NULL in wcmIsHotpluggedDevice
+    
+    ../src/wcmConfig.c: In function 'wcmIsHotpluggedDevice':
+    ../src/wcmConfig.c:442:2: warning: passing argument 3 of 'xf86CheckStrOption' discards 'const' qualifier from pointer target type
+    [enabled by default]
+    In file included from /usr/include/xorg/xf86str.h:43:0,
+                     from /usr/include/xorg/xf86.h:44,
+                     from ../src/xf86Wacom.h:33,
+                     from ../src/wcmConfig.c:24:
+    /usr/include/xorg/xf86Opt.h:87:24: note: expected 'char *' but argument is of type 'const char *'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit b798ae8012a13a0dcaa903e0fdb4ad8e38106b41
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:22:30 2012 -0700
+
+    Fix warning: Swap empty string for NULL in wcmIsAValidType
+    
+    ../src/wcmValidateDevice.c: In function 'wcmIsAValidType':
+    ../src/wcmValidateDevice.c:139:2: warning: passing argument 3 of 'xf86CheckStrOption' discards 'const' qualifier from pointer target type [enabled by default]
+    In file included from /usr/include/xorg/xf86str.h:43:0,
+                     from /usr/include/xorg/xf86.h:44,
+                     from ../src/xf86Wacom.h:33,
+                     from ../src/wcmValidateDevice.c:23:
+    /usr/include/xorg/xf86Opt.h:87:24: note: expected 'char *' but argument is of type 'const char *'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit afac3b0430386d92d31623b065e9ed206e9cdcdd
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:20:23 2012 -0700
+
+    Fix warning: Swap empty string for NULL in wcmNeedAutoHotplug
+    
+    ../src/wcmValidateDevice.c: In function 'wcmNeedAutoHotplug':
+    ../src/wcmValidateDevice.c:574:2: warning: passing argument 3 of 'xf86CheckStrOption' discards 'const' qualifier from pointer target type [enabled by default]
+    In file included from /usr/include/xorg/xf86str.h:43:0,
+                     from /usr/include/xorg/xf86.h:44,
+                     from ../src/xf86Wacom.h:33,
+                     from ../src/wcmValidateDevice.c:23:
+    /usr/include/xorg/xf86Opt.h:87:24: note: expected 'char *' but argument is of type 'const char *'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit de33b3dffbb959ec77c9bd89c7d9d3e7a8451c15
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:18:17 2012 -0700
+
+    Fix warning: Swap empty string for NULL in wcmIsDuplicate
+    
+    ../src/wcmValidateDevice.c: In function 'wcmIsDuplicate':
+    ../src/wcmValidateDevice.c:85:2: warning: passing argument 3 of 'xf86CheckStrOption' discards 'const' qualifier from pointer target type [enabled by default]
+    In file included from /usr/include/xorg/xf86str.h:43:0,
+                     from /usr/include/xorg/xf86.h:44,
+                     from ../src/xf86Wacom.h:33,
+                     from ../src/wcmValidateDevice.c:23:
+    /usr/include/xorg/xf86Opt.h:87:24: note: expected 'char *' but argument is of type 'const char *'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit cff344b105318854ae2b0a9dec3684be38c5ae02
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:16:16 2012 -0700
+
+    Fix warning: Swap empty strings for NULL in wcmCheckSource
+    
+    Also cleans up variable scope.
+    
+    ../src/wcmValidateDevice.c: In function 'wcmCheckSource':
+    ../src/wcmValidateDevice.c:37:2: warning: passing argument 3 of 'xf86CheckStrOption' discards 'const' qualifier from pointer target type [enabled by default]
+    In file included from /usr/include/xorg/xf86str.h:43:0,
+                     from /usr/include/xorg/xf86.h:44,
+                     from ../src/xf86Wacom.h:33,
+                     from ../src/wcmValidateDevice.c:23:
+    /usr/include/xorg/xf86Opt.h:87:24: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmValidateDevice.c:52:4: warning: passing argument 3 of 'xf86CheckStrOption' discards 'const' qualifier from pointer target type [enabled by default]
+    In file included from /usr/include/xorg/xf86str.h:43:0,
+                     from /usr/include/xorg/xf86.h:44,
+                     from ../src/xf86Wacom.h:33,
+                     from ../src/wcmValidateDevice.c:23:
+    /usr/include/xorg/xf86Opt.h:87:24: note: expected 'char *' but argument is of type 'const char *'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit d691c978d695c2b4882b4ba3e02178bd3aacddb3
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:08:28 2012 -0700
+
+    Fix warning: Constify 'name' argument of InitWcmAtom
+    
+    ../src/wcmXCommand.c: In function 'InitWcmDeviceProperties':
+    ../src/wcmXCommand.c:175:3: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:179:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:186:3: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:194:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:197:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:201:3: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:205:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:209:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:212:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:216:3: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:220:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:225:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:228:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:234:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:238:3: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:244:3: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:249:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    ../src/wcmXCommand.c:254:2: warning: passing argument 2 of 'InitWcmAtom' discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmXCommand.c:121:13: note: expected 'char *' but argument is of type 'const char *'
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 3639e07e837eefe7a6820899548ef0d6eb2d0722
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 12:05:35 2012 -0700
+
+    Fix warning: Remove superflous 'event' pointer in usbParseBTNEvent
+    
+    ../src/wcmUSB.c: In function 'usbInitToolType':
+    ../src/wcmUSB.c:1378:30: warning: cast discards '__attribute__((const))' qualifier from pointer target type [-Wcast-qual]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 39145f819b745fe0122e70d0686d3b4dbf80cca1
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 11:52:06 2012 -0700
+
+    Fix warning: Constify _WacomCommonRec.device_path
+    
+    ../src/wcmConfig.c: In function 'wcmPreInit':
+    ../src/wcmConfig.c:507:26: warning: assignment discards 'const' qualifier from pointer target type [enabled by default]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 912ed64c594bfc03b99b693df32fe3fa6a9c82c3
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 11:41:12 2012 -0700
+
+    Fix warning: Change default_options to be const
+    
+    ../src/wcmConfig.c: At top level:
+    ../src/wcmConfig.c:212:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:212:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:213:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:213:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:214:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:214:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:215:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:215:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:216:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:216:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:217:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    ../src/wcmConfig.c:217:2: warning: initialization discards 'const' qualifier from pointer target type [enabled by default]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 706d2a77396d9c912e1d9157359e07923c8c718b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 11:19:04 2012 -0700
+
+    Fix warning: Have wcmEventAutoDevProbe return const
+    
+    ../src/xf86Wacom.c: In function 'wcmEventAutoDevProbe':
+    ../src/xf86Wacom.c:527:5: warning: return discards 'const' qualifier from pointer target type [enabled by default]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 1d203a20bd21f8bdb22e36e93b67b651dd73743c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 11:10:10 2012 -0700
+
+    Fix warning: Remove superflous casts in getScrollDelta
+    
+    ../src/wcmCommon.c: In function 'getScrollDelta':
+    ../src/wcmCommon.c:333:13: warning: cast from function call of type 'double' to non-matching type 'int' [-Wbad-function-cast]
+    ../src/wcmCommon.c:334:9: warning: cast from function call of type 'double' to non-matching type 'int' [-Wbad-function-cast]
+    ../src/wcmCommon.c:335:10: warning: cast from function call of type 'double' to non-matching type 'int' [-Wbad-function-cast]
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2adab89eb2c73b7806aade5b422adba4056d8fd8
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Mon May 14 16:56:02 2012 -0700
+
+    Add 0xED and 0xEF
+    
+    Signed-off-by: Ping Cheng <pinglinux@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 7ee27fee0741cc756dfd20a60afb3de1c9e0ed1b
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed May 2 14:22:27 2012 +1000
+
+    conf: add Intuos4 WL (PTK-540WL) to fdi file
+    
+    4709394d76267df05f8dfa7f13e6beb1f9c7394f added it to the xorg.conf.d
+    snippet. For those stuck on HAL add it to the fdi file too.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Przemo Firszt <przemo@firszt.eu>
+
+commit 904443623df7f293f6d87e85e0b808183afe67c9
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 2 10:25:01 2012 -0700
+
+    wacom 0.15.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 311be3952d3557720bbb5e0203066ca1864f74ef
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Apr 24 11:40:58 2012 -0700
+
+    wacom 0.14.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 5fab61b10aabdc5b5461798f9002669adf18f263
+Author: Adam Nielsen <a.nielsen@shikadi.net>
+Date:   Wed Apr 11 16:13:08 2012 +1000
+
+    Add support for the DTI-520
+    
+    Signed-off-by: Adam Nielsen <a.nielsen@shikadi.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 35d855025bb26e0a2daac9b08b4ea868512fb9ab
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Mar 6 14:10:00 2012 -0800
+
+    Add support for the Intuos5
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 466b119b12a0e149a3b79a031878e04d89c628c4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Apr 3 13:13:22 2012 -0700
+
+    Fix off-by-one error in xsetwacom's button handling
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 52a795d2fb1fee5b13e95a2c7089dd87c37d2ea8
+Author: Nikolai Kondrashov <spbnick@gmail.com>
+Date:   Wed Mar 21 22:27:22 2012 +0200
+
+    conf: Only match tablet Waltop devices
+    
+    Only match Waltop event devices classified as tablets.
+    
+    Advanced Waltop tablets have on-the-frame controls such as multifunction
+    dials (controlling scrolling, zooming, volume and keyboard navigation) and
+    keyboard modifier buttons. These are represented as separate event devices
+    and are better handled by xf86-input-evdev.
+    
+    Signed-off-by: Nikolai Kondrashov <spbnick@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5e0c6ff52e9fb25e0fcd8228992ffc7a41b1db8e
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 21 15:36:47 2012 +1000
+
+    Don't dereference priv before checking it for NULL
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit d23809af1613a93ad5b68623cadd4d122da32820
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 21 15:36:04 2012 +1000
+
+    Plug minor memory leak
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 99a9542cb14b763ddf417c71d4966f80eda417fe
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 21 15:34:06 2012 +1000
+
+    Avoid buffer overrun
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit f0e338a4bb54d69a0c83207651efb739d843a469
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 21 15:32:55 2012 +1000
+
+    Don't pass NULL to fclose(3)
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 8b59c9ff369c1b148f716dbc6234ead68311fa21
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 21 15:29:56 2012 +1000
+
+    Fix broken NULL check
+    
+    This check was ok until 7958bb9b1ddef9e8238615fd1b3d15996f00effe, when more
+    code was moved here and it made no sense this way anymore. Change it to
+    return early in the case of NULL allocation.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 61146662a1c3ffff87b71506f3f0c06a18a069a6
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Mar 21 15:28:17 2012 +1000
+
+    Check ioctl return value
+    
+    Really, this shouldn't ever fail but at least it shuts up some static
+    analysers.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit fe2d108dbd2d0769e314a32c9b11376919adcea6
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Mar 14 12:24:04 2012 -0700
+
+    Don't share names of action atoms across properties
+    
+    The names of action atoms are currently created without regard to
+    the property they will be stored in. This results in both e.g.
+    button 1 and StripLeftUp using atoms with the name "Wacom button
+    action 1". When setting either button 1 or StripLeftUp, we ask
+    the server for an atom named "Wacom button action 1" and in both
+    cases receive the *same* atom. This means button 1 is nothing
+    more than an alias for StripLeft up (and similarly for the other
+    actions which share the same name).
+    
+    This patch uses the name of the property the action will be stored
+    in as the prefix to prevent this aliasing from occuring.
+
+commit 220d3fb0bc1cbc9cee4f771f310c36cb07d7af68
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Mar 15 08:05:27 2012 +1000
+
+    man: fix typo in xsetwacom man page
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2ec45ba39ad5c43e97e8ed02e37ebbdc3f41668c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Mar 9 18:17:58 2012 -0800
+
+    wacom 0.14.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit c2c1a42d4dd97b26dee395b5911bee209fddf030
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Mar 6 16:33:31 2012 -0800
+
+    wacom 0.13.99.2
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 8e22ba6d8cfe9a21ea40b959152318efe8e0b338
+Author: Colin Walters <walters@verbum.org>
+Date:   Fri Mar 2 07:24:17 2012 +1000
+
+    wcmXCommand: Fix invalid array size for serial values.
+    
+    Introduced in c21b6876b435bb34112956716fea14477ef9e8d7
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 60b4c868ac5baf5dba82c8c9146dfac068c06eef
+Merge: e7564c9 28abd26
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Mar 1 09:48:50 2012 -0800
+
+    Merge branch 'master' of git://people.freedesktop.org/~whot/xf86-input-wacom
+
+commit 28abd26ba9379004db8667eaa2fcd2aa0b3d6fc4
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Feb 28 11:27:28 2012 +1000
+
+    xsetwacom: fix compiler warning
+    
+    xsetwacom.c: In function ‘set_output’:
+    xsetwacom.c:2359:6: warning: variable ‘success’ set but not used
+    [-Wunused-but-set-variable]
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 6a862efd7f3d8504b600e9d67c2b9b43e41ee8d5
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Feb 28 11:18:12 2012 +1000
+
+    xsetwacom: re-add ToolID with the current tool ID in proximity
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit ef11021997c850d0d3e579777468ec6d52f28f20
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Feb 28 11:16:57 2012 +1000
+
+    xsetwacom: ToolID is actually ToolType
+    
+    ToolID should be the ID of the tool in proximity.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Jason Gerecke <killertofu@gmail.com>
+
+commit c21b6876b435bb34112956716fea14477ef9e8d7
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Feb 22 16:52:52 2012 +1000
+
+    Export current tool ID in the property too
+    
+    Previously, we exported old serial number, old tool ID and current serial
+    number. Export the current tool ID as well.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+    Tested-by: Bastien Nocera <hadess@hadess.net>
+
+commit e7564c941e8ac5ab9549332730844b2380b9e641
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Feb 29 15:24:31 2012 -0800
+
+    wacom 0.13.99.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 00b784202448dfc8f1e142c3745053ae1e82b042
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Feb 29 15:12:27 2012 -0800
+
+    Change return type of 'test_flag_set' to void
+    
+    Compiler complains that nothing is being returned, but nothing
+    *should* be returned.
+
+commit 632134f4697935ada00d72bc19286f551b42da53
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Feb 10 12:00:03 2012 -0800
+
+    Extend length of wheel_actions array to 6
+    
+    This array was apparently overlooked when adding support for the
+    second touch ring present on the 24HD.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 45fd72c9031ed88e4af26b43cbb51d1c64e88602
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Dec 22 13:41:43 2011 -0800
+
+    Remove AC_CORE status print
+    
+    Flag is deprecated, has no effect, and serves no purpose anymore.
+    Remove from the DBG statement.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 6240c226ef429ade3926be0a65341117de2b24e5
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Feb 9 11:07:39 2012 -0800
+
+    Check for appropriate number of properties when setting buttons
+    
+    Commit 7e92aca6 changed the length of the Wacom Button Actions
+    property to be dynamically calculated, but did not take this
+    into account for the property setter (preventing xsetwacom from
+    updating them). This patch replaces the constant length with an
+    identical calculation to ensure we check for the proper size.
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 5a2221de13f73c7edbe4221909225ef5c7c5c18a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Feb 7 10:57:05 2012 -0800
+
+    Remove redundant redeclaration of 'wcmInitialScreens'
+    
+    From GCC:
+       In file included from ../src/xf86Wacom.c:46:0:
+       ../src/xf86Wacom.h:147:13: warning: redundant redeclaration of
+       'wcmInitialScreens' [-Wredundant-decls]
+       ../src/xf86Wacom.h:146:13: note: previous declaration of
+       'wcmInitialScreens' was here
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 4709394d76267df05f8dfa7f13e6beb1f9c7394f
+Author: Przemo Firszt <przemo@firszt.eu>
+Date:   Fri Feb 10 17:55:16 2012 +0000
+
+    Add Wacom Intuos4 Wireless to 50-wacom.conf
+    
+    Intuos4 Wireless doesn't match list of devices in 50-wacom.conf, so evdev was
+    taking over. This patch fixes it, so now wacom driver is used fo Intuoe4 WL
+    PTK-540WL
+    
+    Signed-off-by: Przemo Firszt <przemo@firszt.eu>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 96a2e90c0f6a727fe6942c7b8f05b37167a10ab1
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Sat Feb 4 19:20:44 2012 +1000
+
+    Move some usb-specific keys to wcmUSBData.
+    
+    nbuttons and npadkeys is only used for USB-specific parsing, move them
+    there.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit 7e92aca68a666499c7d6f1946cc849cfb5653ae0
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Feb 3 19:15:54 2012 +1000
+
+    Initialize button action properties for the correct button number (#45557)
+    
+    Previous code had the number of properties for button actions hardcoded to
+    16 (WCM_MAX_MOUSE_BUTTONS). Drop that define and instead initialize the same
+    number of properties that we have on the device as well.
+    
+    X.Org Bug 45557 <http://bugs.freedesktop.org/show_bug.cgi?id=45557>
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit b6fd73d4f79b4731caee4dc72e9f6fcecd2b5161
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Feb 3 19:21:28 2012 +1000
+
+    Compress button counting statement
+    
+    No functional change, just compressing several lines into one.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
+
+commit bc7db7f1ef57beab2a149ca9589cea08f5e69af2
+Author: David Foley <favux.is@gmail.com>
+Date:   Sun Jan 29 11:18:43 2012 -0600
+
+    man.wacom: Fix typo in Touch Gestures.
+    
+    Fix initiates typo in TOUCH GESTURES' Vertical scroll.
+    
+    Signed-off-by: David Foley <favux.is@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 16749eb2d82166a3389fe6209c654bb1fce2e639
+Author: David Foley <favux.is@gmail.com>
+Date:   Thu Jan 26 13:10:23 2012 -0600
+
+    man.wacom: Add gesture description.
+    
+    Add description of the touch gestures to the wacom manual.
+    
+    Signed-off-by: David Foley <favux.is@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit dbc25fa4fd86af7ccd42af04e6360dfdd0336735
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Jan 12 13:40:27 2012 +1000
+
+    Allow for a threshold of -1 to reset to the built-in default (#43221)
+    
+    This switches interpretation of the property from unsigned to signed. Not a
+    big deal, since the maximum value has always been 2048 anyway and on 32-bit
+    that doesn't actually change anything.
+    
+    X.Org Bug 43221 <http://bugs.freedesktop.org/show_bug.cgi?id=43221>
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Reviewed-by: Ping Cheng <pinglinux@gmail.com>
+
+commit 09b1aa6538cd48e20928da9a835999dfc851f62c
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jan 10 11:55:14 2012 +1000
+
+    Fix wrong check for configdir
+    
+    We care about configdir, not sysconfigdir. Otherwise, --with-config-dir=""
+    on a server that does support xorg.conf.d has no effect and the fdi files do
+    not get installed.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Acked-by: Ping Cheng <pinglinux@gmail.com>
+
 commit 8a8931cc77babbd84a4ec7a1df04e995aaa1e980
 Author: Jason Gerecke <killertofu@gmail.com>
 Date:   Mon Jan 16 10:03:10 2012 -0800

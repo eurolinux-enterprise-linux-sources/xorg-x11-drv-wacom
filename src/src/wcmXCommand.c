@@ -118,13 +118,13 @@ Atom prop_debuglevels;
  * @param values Pointer to 32 bit integer array of initial property values
  * @return Atom handle of property name
  */
-static Atom InitWcmAtom(DeviceIntPtr dev, char *name, Atom type, int format, int nvalues, int *values)
+static Atom InitWcmAtom(DeviceIntPtr dev, const char *name, Atom type, int format, int nvalues, int *values)
 {
 	int i;
 	Atom atom;
-	uint8_t val_8[WCM_MAX_MOUSE_BUTTONS];
-	uint16_t val_16[WCM_MAX_MOUSE_BUTTONS];
-	uint32_t val_32[WCM_MAX_MOUSE_BUTTONS];
+	uint8_t val_8[WCM_MAX_BUTTONS];
+	uint16_t val_16[WCM_MAX_BUTTONS];
+	uint32_t val_32[WCM_MAX_BUTTONS];
 	pointer converted = val_32;
 
 	for (i = 0; i < nvalues; i++)
@@ -156,7 +156,8 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 {
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 	WacomCommonPtr common = priv->common;
-	int values[WCM_MAX_MOUSE_BUTTONS];
+	int values[WCM_MAX_BUTTONS];
+	int nbuttons;
 
 	DBG(10, priv, "\n");
 
@@ -189,7 +190,8 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 	values[1] = priv->old_serial;
 	values[2] = priv->old_device_id;
 	values[3] = priv->cur_serial;
-	prop_serials = InitWcmAtom(pInfo->dev, WACOM_PROP_SERIALIDS, XA_INTEGER, 32, 4, values);
+	values[4] = priv->cur_device_id;
+	prop_serials = InitWcmAtom(pInfo->dev, WACOM_PROP_SERIALIDS, XA_INTEGER, 32, 5, values);
 
 	values[0] = priv->serial;
 	prop_serial_binding = InitWcmAtom(pInfo->dev, WACOM_PROP_SERIAL_BIND, XA_INTEGER, 32, 1, values);
@@ -225,9 +227,11 @@ void InitWcmDeviceProperties(InputInfoPtr pInfo)
 	values[0] = MakeAtom(pInfo->type_name, strlen(pInfo->type_name), TRUE);
 	prop_tooltype = InitWcmAtom(pInfo->dev, WACOM_PROP_TOOL_TYPE, XA_ATOM, 32, 1, values);
 
+
 	/* default to no actions */
+	nbuttons = min(max(priv->nbuttons + 4, 7), WCM_MAX_BUTTONS);
 	memset(values, 0, sizeof(values));
-	prop_btnactions = InitWcmAtom(pInfo->dev, WACOM_PROP_BUTTON_ACTIONS, XA_ATOM, 32, WCM_MAX_MOUSE_BUTTONS, values);
+	prop_btnactions = InitWcmAtom(pInfo->dev, WACOM_PROP_BUTTON_ACTIONS, XA_ATOM, 32, nbuttons, values);
 
 	if (IsPad(priv)) {
 		memset(values, 0, sizeof(values));
@@ -288,7 +292,7 @@ static int wcmSanityCheckProperty(XIPropertyValuePtr prop)
 			case AC_KEY:
 				break;
 			case AC_BUTTON:
-				if (code > WCM_MAX_MOUSE_BUTTONS)
+				if (code > WCM_MAX_BUTTONS)
 					return BadValue;
 				break;
 			case AC_DISPLAYTOGGLE:
@@ -492,12 +496,12 @@ static int wcmSetWheelOrStripProperty(DeviceIntPtr dev, Atom property,
 	switch (prop->format)
 	{
 		case 8:
-			if (values.v8[0] > WCM_MAX_MOUSE_BUTTONS ||
-			    values.v8[1] > WCM_MAX_MOUSE_BUTTONS ||
-			    values.v8[2] > WCM_MAX_MOUSE_BUTTONS ||
-			    values.v8[3] > WCM_MAX_MOUSE_BUTTONS ||
-			    values.v8[4] > WCM_MAX_MOUSE_BUTTONS ||
-			    values.v8[5] > WCM_MAX_MOUSE_BUTTONS)
+			if (values.v8[0] > WCM_MAX_BUTTONS ||
+			    values.v8[1] > WCM_MAX_BUTTONS ||
+			    values.v8[2] > WCM_MAX_BUTTONS ||
+			    values.v8[3] > WCM_MAX_BUTTONS ||
+			    values.v8[4] > WCM_MAX_BUTTONS ||
+			    values.v8[5] > WCM_MAX_BUTTONS)
 				return BadValue;
 
 			if (!checkonly) {
@@ -715,7 +719,7 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 		 * set it at runtime. If we get here from wcmUpdateSerial,
 		 * we know the serial has ben set internally already, so we
 		 * can reply with success. */
-		if (prop->size == 4 && prop->format == 32)
+		if (prop->size == 5 && prop->format == 32)
 			if (((CARD32*)prop->data)[3] == priv->cur_serial)
 				return Success;
 
@@ -755,14 +759,16 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 			common->wcmCursorProxoutDist = value;
 	} else if (property == prop_threshold)
 	{
-		CARD32 value;
+		INT32 value;
 
 		if (prop->size != 1 || prop->format != 32)
 			return BadValue;
 
-		value = *(CARD32*)prop->data;
+		value = *(INT32*)prop->data;
 
-		if ((value < 1) || (value > FILTER_PRESSURE_RES))
+		if (value == -1)
+			value = DEFAULT_THRESHOLD;
+		else if ((value < 1) || (value > FILTER_PRESSURE_RES))
 			return BadValue;
 
 		if (!checkonly)
@@ -844,7 +850,8 @@ int wcmSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
 #endif
 	} else if (property == prop_btnactions)
 	{
-		if (prop->size != WCM_MAX_MOUSE_BUTTONS)
+		int nbuttons = min(max(priv->nbuttons + 4, 7), WCM_MAX_BUTTONS);
+		if (prop->size != nbuttons)
 			return BadMatch;
 		wcmSetPropertyButtonActions(dev, property, prop, checkonly);
 	} else
@@ -863,17 +870,18 @@ int wcmGetProperty (DeviceIntPtr dev, Atom property)
 
 	if (property == prop_serials)
 	{
-		uint32_t values[4];
+		uint32_t values[5];
 
 		values[0] = common->tablet_id;
 		values[1] = priv->old_serial;
 		values[2] = priv->old_device_id;
 		values[3] = priv->cur_serial;
+		values[4] = priv->cur_device_id;
 
 		DBG(10, priv, "Update to serial: %d\n", priv->old_serial);
 
 		return XIChangeDeviceProperty(dev, property, XA_INTEGER, 32,
-					      PropModeReplace, 4,
+					      PropModeReplace, 5,
 					      values, FALSE);
 	}
 
@@ -886,14 +894,14 @@ serialTimerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
 	InputInfoPtr pInfo = arg;
 	WacomDevicePtr priv = pInfo->private;
 	XIPropertyValuePtr prop;
-	CARD32 prop_value[4];
+	CARD32 prop_value[5];
 	int sigstate;
 	int rc;
 
 	sigstate = xf86BlockSIGIO();
 
 	rc = XIGetDeviceProperty(pInfo->dev, prop_serials, &prop);
-	if (rc != Success || prop->format != 32 || prop->size != 4)
+	if (rc != Success || prop->format != 32 || prop->size != 5)
 	{
 		xf86Msg(X_ERROR, "%s: Failed to update serial number.\n",
 			pInfo->name);
@@ -902,6 +910,7 @@ serialTimerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
 
 	memcpy(prop_value, prop->data, sizeof(prop_value));
 	prop_value[3] = priv->cur_serial;
+	prop_value[4] = priv->cur_device_id;
 
 	XIChangeDeviceProperty(pInfo->dev, prop_serials, XA_INTEGER,
 			       prop->format, PropModeReplace,
@@ -913,7 +922,7 @@ serialTimerFunc(OsTimerPtr timer, CARD32 now, pointer arg)
 }
 
 void
-wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial)
+wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial, int id)
 {
 	WacomDevicePtr priv = pInfo->private;
 
@@ -921,6 +930,7 @@ wcmUpdateSerial(InputInfoPtr pInfo, unsigned int serial)
 		return;
 
 	priv->cur_serial = serial;
+	priv->cur_device_id = id;
 
 	/* This function is called during SIGIO. Schedule timer for property
 	 * event delivery outside of signal handler. */
