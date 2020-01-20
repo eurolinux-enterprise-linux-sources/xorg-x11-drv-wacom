@@ -1,0 +1,118 @@
+From 13b35027202496be168b3c345cd6fc65055f9604 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 24 Oct 2018 10:35:17 +1000
+Subject: [PATCH 4/4] Remember the event types we receive and skip events with
+ no data
+
+On RHEL7.x kernels we get event frames with merely MSC_SERIAL -1 for some
+devices on proximity in. This is caused by the accelerometer data that is
+otherwise suppressed by those kernels.
+
+E: 123.456 0000 0000 0000       # ------------ SYN_REPORT (0) ----------
+E: 123.456 0004 0000 -001       # EV_MSC / MSC_SERIAL           -1
+
+For a MSC_SERIAL -1 we default to the PAD_ID (0x10), despite the events
+happening on the Pen device node. This triggers an error message during EV_SYN
+processing:
+
+   (EE) usbDispatchEvents: Device Type mismatch - 16 -> 0. This is a BUG.
+
+Once we receive the BTN_TOOL_PEN when the actual pen comes into proximity, the
+error message goes away because our tool type matches with what we expect.
+
+Fix this issue by remembering which event types we received in the current
+frame. If all we got was EV_MSC, skip the event dispatch - we don't have any
+data to process anyway.
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+(cherry picked from commit 84400df38f0f9abe664de26a8d3747b10f3a05e5)
+---
+ src/wcmUSB.c | 24 ++++++++++++++++++------
+ 1 file changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index cf89ff8..2bb6b78 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -38,6 +38,7 @@ typedef struct {
+ 	int wcmMTChannel;
+ 	int wcmEventCnt;
+ 	struct input_event wcmEvents[MAX_USB_EVENTS];
++	uint32_t wcmEventFlags;      /* event types received in this frame */
+ 	int nbuttons;                /* total number of buttons */
+ 	int npadkeys;                /* number of pad keys in the above array */
+ 	int padkey_code[WCM_MAX_BUTTONS];/* hardware codes for buttons */
+@@ -973,6 +974,13 @@ static int usbChooseChannel(WacomCommonPtr common, int device_type, unsigned int
+ 	return channel;
+ }
+ 
++static inline void
++usbResetEventCounter(wcmUSBData *private)
++{
++	private->wcmEventCnt = 0;
++	private->wcmEventFlags = 0;
++}
++
+ static void usbParseEvent(InputInfoPtr pInfo,
+ 	const struct input_event* event)
+ {
+@@ -989,12 +997,13 @@ static void usbParseEvent(InputInfoPtr pInfo,
+ 	{
+ 		LogMessageVerbSigSafe(X_ERROR, 0, "%s: usbParse: Exceeded event queue (%d) \n",
+ 				      pInfo->name, private->wcmEventCnt);
+-		private->wcmEventCnt = 0;
++		usbResetEventCounter(private);
+ 		return;
+ 	}
+ 
+ 	/* save it for later */
+ 	private->wcmEvents[private->wcmEventCnt++] = *event;
++	private->wcmEventFlags |= 1 << event->type;
+ 
+ 	switch (event->type)
+ 	{
+@@ -1032,7 +1041,7 @@ static void usbParseMscEvent(InputInfoPtr pInfo,
+ 		LogMessageVerbSigSafe(X_ERROR, 0,
+ 				      "%s: usbParse: Ignoring event from invalid serial 0\n",
+ 				      pInfo->name);
+-		private->wcmEventCnt = 0;
++		usbResetEventCounter(private);
+ 	}
+ }
+ 
+@@ -1048,6 +1057,7 @@ static void usbParseSynEvent(InputInfoPtr pInfo,
+ 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
+ 	WacomCommonPtr common = priv->common;
+ 	wcmUSBData* private = common->private;
++	const uint32_t significant_event_types = ~(1 << EV_SYN | 1 << EV_MSC);
+ 
+ 	if (event->code != SYN_REPORT)
+ 		return;
+@@ -1060,9 +1070,11 @@ static void usbParseSynEvent(InputInfoPtr pInfo,
+ 		goto skipEvent;
+ 	}
+ 
+-	/* ignore sync windows that contain no data */
+-	if (private->wcmEventCnt == 1 &&
+-	    private->wcmEvents->type == EV_SYN) {
++
++	/* If all we get in an event frame is EV_SYN/EV_MSC, we don't have
++	 * real data to process. */
++	if ((private->wcmEventFlags & significant_event_types) == 0)
++	{
+ 		DBG(6, common, "no real events received\n");
+ 		goto skipEvent;
+ 	}
+@@ -1071,7 +1083,7 @@ static void usbParseSynEvent(InputInfoPtr pInfo,
+ 	usbDispatchEvents(pInfo);
+ 
+ skipEvent:
+-	private->wcmEventCnt = 0;
++	usbResetEventCounter(private);
+ }
+ 
+ static int usbFilterEvent(WacomCommonPtr common, struct input_event *event)
+-- 
+2.19.2
+

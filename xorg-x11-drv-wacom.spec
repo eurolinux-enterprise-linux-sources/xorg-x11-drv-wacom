@@ -9,7 +9,7 @@
 Summary:    Xorg X11 wacom input driver
 Name:       xorg-x11-drv-wacom
 Version:    0.36.1
-Release:    1%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Release:    3%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:        http://www.x.org
 License:    GPLv2+
 Group:      User Interface/X Hardware Support
@@ -21,6 +21,13 @@ Source2: commitid
 %else
 Source0: https://github.com/linuxwacom/xf86-input-wacom/releases/download/xf86-input-wacom-%{version}/xf86-input-wacom-%{version}.tar.bz2
 %endif
+
+# Bug 1642197 - Cintiq 27QHD triggers error messages on proximity in
+Patch01: 0001-Correct-two-comments.patch
+Patch02: 0002-Reformat-a-debugging-message.patch
+Patch03: 0003-Split-EV_MSC-handling-out-of-the-EV_SYN-handling.patch
+Patch04: 0004-Remember-the-event-types-we-receive-and-skip-events-.patch
+Patch05: 0001-Ratelimit-the-device-type-mismatch-warning.patch
 
 ExcludeArch: s390 s390x
 
@@ -41,6 +48,11 @@ X.Org X11 wacom input driver for Wacom tablets.
 
 %prep
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
+%patch01 -p1
+%patch02 -p1
+%patch03 -p1
+%patch04 -p1
+%patch05 -p1
 
 %build
 autoreconf --force -v --install || exit 1
@@ -102,6 +114,15 @@ X.Org X11 wacom input driver development files.
 %{_bindir}/isdv4-serial-debugger
 
 %changelog
+* Thu May 30 2019 Peter Hutterer <peter.hutterer@redhat.com> 0.36.1-3
+- Ratelimit the bug message warnings (#1642197)
+
+* Thu Jan 10 2019 Peter Hutterer <peter.hutterer@redhat.com> 0.36.1-2
+- Fix Cintiq 27QHD error message on proximity in (#1642197)
+
+* Wed May 30 2018 Adam Jackson <ajax@redhat.com> - 0.36.1-1.1
+- Rebuild for xserver 1.20
+
 * Tue May 15 2018 Peter Hutterer <peter.hutterer@redhat.com> 0.36.1-1
 - wacom 0.36.1 (#1564630)
 

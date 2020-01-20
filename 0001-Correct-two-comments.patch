@@ -1,0 +1,39 @@
+From ce73d3ff5f3d2be67bd1213e21163db938943ac5 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 24 Oct 2018 10:10:46 +1000
+Subject: [PATCH 1/4] Correct two comments
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+(cherry picked from commit 6e2728780056614e4b2f37abde4f60f072edc95a)
+---
+ src/wcmUSB.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index 8ded958..8a07368 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -980,9 +980,7 @@ static void usbParseEvent(InputInfoPtr pInfo,
+ 
+ 	DBG(10, common, "\n");
+ 
+-	/* store events until we receive the MSC_SERIAL containing
+-	 * the serial number or a SYN_REPORT.
+-	 */
++	/* store events until we receive a SYN_REPORT */
+ 
+ 	/* space left? bail if not. */
+ 	if (private->wcmEventCnt >= ARRAY_SIZE(private->wcmEvents))
+@@ -1036,7 +1034,7 @@ static void usbParseSynEvent(InputInfoPtr pInfo,
+ 	}
+ 	else
+ 	{
+-		/* not an SYN_REPORT and not an SYN_REPORT, bail out */
++		/* not a MSC_SERIAL and not a SYN_REPORT, bail out */
+ 		return;
+ 	}
+ 
+-- 
+2.19.2
+

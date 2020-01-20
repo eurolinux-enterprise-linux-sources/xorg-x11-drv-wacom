@@ -1,0 +1,48 @@
+From 83ffb252fae8faeace89ed066c0ec37376824ff2 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Thu, 30 May 2019 09:08:52 +1000
+Subject: [PATCH] Ratelimit the device type mismatch warning
+
+This message still happens when the software buttons are pressed and
+immediately after plug. Since the actual events just fall through and don't
+cause any state changes, let's ratelimit the message so it doesn't fill up the
+logs.
+
+https://bugzilla.redhat.com/show_bug.cgi?id=1642197
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmUSB.c | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index 2f0e1d7..481646d 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -1788,10 +1788,19 @@ static void usbDispatchEvents(InputInfoPtr pInfo)
+ 	ds = &common->wcmChannel[channel].work;
+ 	dslast = common->wcmChannel[channel].valid.state;
+ 
+-	if (ds->device_type && ds->device_type != private->wcmDeviceType)
+-		LogMessageVerbSigSafe(X_ERROR, 0,
+-				      "usbDispatchEvents: Device Type mismatch - %d -> %d. This is a BUG.\n",
+-				      ds->device_type, private->wcmDeviceType);
++	if (ds->device_type && ds->device_type != private->wcmDeviceType) {
++		static int warnings = 0;
++
++		if (warnings < 5) {
++			warnings++;
++			LogMessageVerbSigSafe(X_ERROR, 0,
++					      "usbDispatchEvents: Device Type mismatch - %d -> %d. This is a BUG.\n",
++					      ds->device_type, private->wcmDeviceType);
++			if (warnings == 5)
++				LogMessageVerbSigSafe(X_ERROR, 0,
++						      "usbDispatchEvents: above bug warning is suppressed now\n");
++		}
++	}
+ 	/* no device type? */
+ 	if (!ds->device_type && private->wcmDeviceType) {
+ 		ds->device_type = private->wcmDeviceType;
+-- 
+2.21.0
+

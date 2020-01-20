@@ -1,0 +1,33 @@
+From a1221ddfa36a3295f115b6f44e0f8a7069d97bc2 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Wed, 24 Oct 2018 10:21:40 +1000
+Subject: [PATCH 2/4] Reformat a debugging message
+
+No functional changes but makes grepping for it a lot easier
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+(cherry picked from commit cafb587a4eb89d906317dbe347198b523e494c76)
+---
+ src/wcmUSB.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index 8a07368..be9be6e 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -1041,9 +1041,8 @@ static void usbParseSynEvent(InputInfoPtr pInfo,
+ 	/* ignore events without information */
+ 	if ((private->wcmEventCnt < 2) && private->wcmLastToolSerial)
+ 	{
+-		DBG(3, common, "%s: dropping empty event"
+-			" for serial %d\n", pInfo->name,
+-			private->wcmLastToolSerial);
++		DBG(3, common, "%s: dropping empty event for serial %d\n",
++		    pInfo->name, private->wcmLastToolSerial);
+ 		goto skipEvent;
+ 	}
+ 
+-- 
+2.19.2
+
