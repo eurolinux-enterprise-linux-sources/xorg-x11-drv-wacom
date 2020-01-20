@@ -1,0 +1,58 @@
+From 8db05e73d6fc0f9aeb74fbe2ba109a7205d3819e Mon Sep 17 00:00:00 2001
+From: Aaron Armstrong Skomra <skomra@gmail.com>
+Date: Tue, 2 May 2017 09:48:56 -0700
+Subject: [PATCH 1/4] Support recent display devices on older kernels
+
+Older kernels like 2.6.30 will end up with touches
+interpreted as relative events unless these devices
+are explicitly added.
+
+Signed-off-by: Aaron Armstrong Skomra <aaron.skomra@wacom.com>
+Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+(cherry picked from commit 0318b1cda79261d73f04676dd662f98c84711747)
+---
+ src/wcmUSB.c            | 8 ++++++++
+ src/wcmValidateDevice.c | 8 ++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index 2f9d93f..295286a 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -287,6 +287,14 @@ static struct WacomModelDesc
+ 	{ WACOM_VENDOR_ID, 0x57, 200000, 200000, &usbCintiqV5,   "DTK2241"		},
+ 	{ WACOM_VENDOR_ID, 0x59, 200000, 200000, &usbCintiqV5,   "DTH2242"		},
+ 	{ WACOM_VENDOR_ID, 0x5B, 200000, 200000, &usbCintiqV5,   "Cintiq 22HDT"		},
++	{ WACOM_VENDOR_ID, 0x34A, 200000, 200000, &usbCintiqV5,  "Mobilestudio Pro 13"	}, /* Touch */
++	{ WACOM_VENDOR_ID, 0x34B, 200000, 200000, &usbCintiqV5,  "MobileStudio Pro 16"	}, /* Touch */
++	{ WACOM_VENDOR_ID, 0x34D, 200000, 200000, &usbCintiqV5,  "MobileStudio Pro 13"	},
++	{ WACOM_VENDOR_ID, 0x34E, 200000, 200000, &usbCintiqV5,  "MobileStudio Pro 16"	},
++	{ WACOM_VENDOR_ID, 0x34F, 200000, 200000, &usbCintiqV5,  "Cintiq 13 FHD Pro"	},
++	{ WACOM_VENDOR_ID, 0x350, 200000, 200000, &usbCintiqV5,  "Cintiq 16 UHD Pro"	},
++	{ WACOM_VENDOR_ID, 0x353, 200000, 200000, &usbCintiqV5,  "Cintiq 13 FHD Pro"	}, /* Touch */
++	{ WACOM_VENDOR_ID, 0x354, 200000, 200000, &usbCintiqV5,  "Cintiq 16 UHD Pro"	}, /* Touch */
+ 
+ 	{ WACOM_VENDOR_ID, 0x90, 100000, 100000, &usbTabletPC,   "TabletPC 0x90"	},
+ 	{ WACOM_VENDOR_ID, 0x93, 100000, 100000, &usbTabletPC,   "TabletPC 0x93"	},
+diff --git a/src/wcmValidateDevice.c b/src/wcmValidateDevice.c
+index fd27264..0da5076 100644
+--- a/src/wcmValidateDevice.c
++++ b/src/wcmValidateDevice.c
+@@ -309,6 +309,14 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
+ 		case 0x5D: /* DTH2242 Touch */
+ 		case 0x5E: /* Cintiq 22HDT Touch */
+ 		case 0x304:/* Cintiq 13HD */
++		case 0x34A:/* MobileStudio Pro 13 Touch */
++		case 0x34B:/* MobileStudio Pro 16 Touch */
++		case 0x34D:/* MobileStudio Pro 13 */
++		case 0x34E:/* MobileStudio Pro 13 */
++		case 0x34F:/* Cintiq Pro 13 FHD */
++		case 0x350:/* Cintiq Pro 16 UHD */
++		case 0x353:/* Cintiq Pro 13 FHD Touch */
++		case 0x354:/* Cintiq Pro 13 UHD Touch */
+ 			TabletSetFeature(priv->common, WCM_LCD);
+ 			break;
+ 	}
+-- 
+2.13.6
+

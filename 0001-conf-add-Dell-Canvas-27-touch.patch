@@ -1,0 +1,38 @@
+From 48c2cd83ccf797fe618a48a743afee35883aecf9 Mon Sep 17 00:00:00 2001
+From: Benjamin Tissoires <benjamin.tissoires@gmail.com>
+Date: Fri, 3 Nov 2017 15:19:24 +0100
+Subject: [PATCH] conf: add Dell Canvas 27 touch
+
+The Dell canvas 27 is an external monitor with pen and touch, but the
+pen is provided by Wacom, and the touch by Advanced Silicon.
+To have proper touch arbitration, we need to force xf86-input-wacom
+to also handle the touch part.
+
+Signed-off-by: Benjamin Tissoires <benjamin.tissoires@gmail.com>
+Reviewed-By: Jason Gerecke <jason.gerecke@wacom.com>
+Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ conf/70-wacom.conf | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/conf/70-wacom.conf b/conf/70-wacom.conf
+index a20e3a3..86a3f90 100644
+--- a/conf/70-wacom.conf
++++ b/conf/70-wacom.conf
+@@ -101,3 +101,12 @@ Section "InputClass"
+ 	Driver "wacom"
+ 	Option "Button2" "3"
+ EndSection
++
++# Dell Canvas 27 (touch part is an Advanced Silicon, pen part a Wacom)
++Section "InputClass"
++        Identifier "Dell Canvas 27 Touch"
++        MatchUSBID "2575:0204"
++        MatchDevicePath "/dev/input/event*"
++        MatchIsTouchscreen "true"
++        Driver "wacom"
++EndSection
+-- 
+2.13.6
+

@@ -1,0 +1,84 @@
+From 84e81636b29cca6dc1a5423e76ac2ab2c636eb86 Mon Sep 17 00:00:00 2001
+From: Peter Hutterer <peter.hutterer@who-t.net>
+Date: Tue, 18 Jul 2017 08:41:37 +1000
+Subject: [PATCH] Remove the device's fd from the select() set when we get
+ ENODEV
+
+If the device is unplugged, the fd triggers in select/poll/... but comes back
+with ENODEV. This triggers a lot of error messages in the log until finally
+the udev code catches up with us and the device is removed properly.
+
+Catch that case by removing the fd from the select() set so we don't get
+triggered to call read_input on it anymore.
+
+https://sourceforge.net/p/linuxwacom/bugs/337/
+
+Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+Tested-by: crocket <crockabiscuit@gmail.com>
+Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+(cherry picked from commit 912611608b3ba892a7c26d1be81209f4e5b009d5)
+---
+ src/xf86Wacom.c | 12 +++++++++---
+ src/xf86Wacom.h |  2 +-
+ 2 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/src/xf86Wacom.c b/src/xf86Wacom.c
+index 90ce793..896a8c1 100644
+--- a/src/xf86Wacom.c
++++ b/src/xf86Wacom.c
+@@ -632,7 +632,8 @@ static void wcmDevReadInput(InputInfoPtr pInfo)
+ 		if (!wcmReady(pInfo)) break;
+ 
+ 		/* dispatch */
+-		wcmReadPacket(pInfo);
++		if (!wcmReadPacket(pInfo))
++			break;
+ 	}
+ 
+ #ifdef DEBUG
+@@ -649,7 +650,7 @@ static void wcmDevReadInput(InputInfoPtr pInfo)
+ #endif
+ }
+ 
+-void wcmReadPacket(InputInfoPtr pInfo)
++Bool wcmReadPacket(InputInfoPtr pInfo)
+ {
+ 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
+ 	WacomCommonPtr common = priv->common;
+@@ -672,7 +673,10 @@ void wcmReadPacket(InputInfoPtr pInfo)
+ 		if (errno != EAGAIN && errno != EINTR)
+ 			LogMessageVerbSigSafe(X_ERROR, 0,
+ 					      "%s: Error reading wacom device : %s\n", pInfo->name, strerror(errno));
+-		return;
++		if (errno == ENODEV)
++			xf86RemoveEnabledDevice(pInfo);
++
++		return FALSE;
+ 	}
+ 
+ 	/* account for new data */
+@@ -704,6 +708,8 @@ void wcmReadPacket(InputInfoPtr pInfo)
+ 	}
+ 
+ 	common->bufpos = len;
++
++	return TRUE;
+ }
+ 
+ int wcmDevChangeControl(InputInfoPtr pInfo, xDeviceCtl * control)
+diff --git a/src/xf86Wacom.h b/src/xf86Wacom.h
+index afb4e9e..ccc2d56 100644
+--- a/src/xf86Wacom.h
++++ b/src/xf86Wacom.h
+@@ -120,7 +120,7 @@ char *wcmEventAutoDevProbe (InputInfoPtr pInfo);
+ int wcmInitTablet(InputInfoPtr pInfo, const char* id, float version);
+ 
+ /* standard packet handler */
+-void wcmReadPacket(InputInfoPtr pInfo);
++Bool wcmReadPacket(InputInfoPtr pInfo);
+ 
+ /* handles suppression, filtering, and dispatch. */
+ void wcmEvent(WacomCommonPtr common, unsigned int channel, const WacomDeviceState* ds);
+-- 
+2.13.6
+

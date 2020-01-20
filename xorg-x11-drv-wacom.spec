@@ -9,7 +9,7 @@
 Summary:    Xorg X11 wacom input driver
 Name:       xorg-x11-drv-wacom
 Version:    0.34.2
-Release:    2%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Release:    4%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:        http://www.x.org
 License:    GPLv2+
 Group:      User Interface/X Hardware Support
@@ -23,6 +23,14 @@ Source0: http://prdownloads.sourceforge.net/linuxwacom/xf86-input-wacom-%{versio
 %endif
 
 Patch01: 0001-Introduce-Pressure2K-config-option-for-incompatible-.patch
+# Bug 1496650 - Fix hang after unplugging a device
+Patch02: 0001-Remove-the-device-s-fd-from-the-select-set-when-we-g.patch
+# Bug 1496659 - Fix device flags for the 13HD, 22HDT and the 2nd gen Intuos Pro 
+Patch03: 0001-Support-recent-display-devices-on-older-kernels.patch
+Patch04: 0002-Support-DTH-1152-on-older-kernels.patch
+Patch05: 0003-Add-support-for-2nd-generation-Intuos-Pro.patch
+Patch06: 0004-Correct-device-flags-for-multiple-devices.patch
+Patch07: 0001-conf-add-Dell-Canvas-27-touch.patch
 
 ExcludeArch: s390 s390x
 
@@ -44,6 +52,12 @@ X.Org X11 wacom input driver for Wacom tablets.
 %prep
 %setup -q -n %{tarball}-%{?gitdate:%{gitdate}}%{!?gitdate:%{version}}
 %patch01 -p1
+%patch02 -p1
+%patch03 -p1
+%patch04 -p1
+%patch05 -p1
+%patch06 -p1
+%patch07 -p1
 
 %build
 autoreconf --force -v --install || exit 1
@@ -105,6 +119,13 @@ X.Org X11 wacom input driver development files.
 %{_bindir}/isdv4-serial-debugger
 
 %changelog
+* Wed Nov 08 2017 Peter Hutterer <peter.hutterer@redhat.com> 0.34.2-4
+- Add custom .conf snippet for the Dell Canvas 27 touchscreen (#1506538)
+
+* Wed Oct 04 2017 Peter Hutterer <peter.hutterer@redhat.com> 0.34.2-3
+- Fix hang after unplugging a device (#1496650)
+- Correct device flags for some Cintiqs and Intuos pros (#1496659)
+
 * Thu Jun 01 2017 Peter Hutterer <peter.hutterer@redhat.com> 0.34.2-2
 - Add Pressure2K option for backwards-compatibility with applications that
   hardcode the previous pressure range (#1457024)
