@@ -1,0 +1,53 @@
+From 4a96a58f2693b291b91e21b7e34f5c5e04015f3f Mon Sep 17 00:00:00 2001
+From: Jason Gerecke <killertofu@gmail.com>
+Date: Tue, 3 Oct 2017 13:45:37 -0700
+Subject: [PATCH] Add support for kernel's new BTN_STYLUS3 event
+
+BTN_STYLUS3 was (will be) added to the Linux 4.15 kernel to support the
+third button present on Wacom's "Pro Pen 3D" stylus. This commit adds
+support for this new event, mapping it to mouse button 8 ("navigate
+back"). Remapping this button to a different function is possible by
+using commands like `xsetwacom set <id> button 8 <action>`.
+
+Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+---
+ src/wcmUSB.c        | 4 ++++
+ src/xf86WacomDefs.h | 6 ++++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/src/wcmUSB.c b/src/wcmUSB.c
+index 0b5ec57..2f96a8a 100644
+--- a/src/wcmUSB.c
++++ b/src/wcmUSB.c
+@@ -1454,6 +1454,10 @@ static void usbParseKeyEvent(WacomCommonPtr common,
+ 			ds->buttons = mod_buttons(ds->buttons, 2, event->value);
+ 			break;
+ 
++		case BTN_STYLUS3:
++			ds->buttons = mod_buttons(ds->buttons, 3, event->value);
++			break;
++
+ 		default:
+ 			change = 0;
+ 	}
+diff --git a/src/xf86WacomDefs.h b/src/xf86WacomDefs.h
+index ec34211..a772597 100644
+--- a/src/xf86WacomDefs.h
++++ b/src/xf86WacomDefs.h
+@@ -93,6 +93,12 @@
+ #define ABS_MT_SLOT 0x2f
+ #endif
+ 
++/* 4.15 */
++
++#ifndef BTN_STYLUS3
++#define BTN_STYLUS3 0x149
++#endif
++
+ /******************************************************************************
+  * Forward Declarations
+  *****************************************************************************/
+-- 
+2.14.3
+

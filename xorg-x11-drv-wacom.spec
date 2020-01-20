@@ -9,7 +9,7 @@
 Summary:    Xorg X11 wacom input driver
 Name:       xorg-x11-drv-wacom
 Version:    0.34.2
-Release:    4%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
+Release:    5%{?gitdate:.%{gitdate}git%{gitversion}}%{?dist}
 URL:        http://www.x.org
 License:    GPLv2+
 Group:      User Interface/X Hardware Support
@@ -31,6 +31,10 @@ Patch04: 0002-Support-DTH-1152-on-older-kernels.patch
 Patch05: 0003-Add-support-for-2nd-generation-Intuos-Pro.patch
 Patch06: 0004-Correct-device-flags-for-multiple-devices.patch
 Patch07: 0001-conf-add-Dell-Canvas-27-touch.patch
+
+# Bug 1557255 - Add support for the Wacom Pro Pen 3D
+Patch08: 0001-Add-support-for-kernel-s-new-BTN_STYLUS3-event.patch
+Patch09: 0002-Allocate-4-buttons-for-stylus-devices-Pro-Pen-3D.patch
 
 ExcludeArch: s390 s390x
 
@@ -58,6 +62,8 @@ X.Org X11 wacom input driver for Wacom tablets.
 %patch05 -p1
 %patch06 -p1
 %patch07 -p1
+%patch08 -p1
+%patch09 -p1
 
 %build
 autoreconf --force -v --install || exit 1
@@ -119,6 +125,9 @@ X.Org X11 wacom input driver development files.
 %{_bindir}/isdv4-serial-debugger
 
 %changelog
+* Thu Apr 05 2018 Peter Hutterer <peter.hutterer@redhat.com> 0.34.2-5
+- Add support for the Pro Pen 3D (#1557255)
+
 * Wed Nov 08 2017 Peter Hutterer <peter.hutterer@redhat.com> 0.34.2-4
 - Add custom .conf snippet for the Dell Canvas 27 touchscreen (#1506538)
 
