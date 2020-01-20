@@ -200,7 +200,7 @@ static int wcmInitAxes(DeviceIntPtr pWcm)
 	if (!IsPad(priv))
 	{
 		label = XIGetKnownProperty(AXIS_LABEL_PROP_ABS_PRESSURE);
-		max = FILTER_PRESSURE_RES;
+		max = priv->maxCurve;
 	}
 
 	wcmInitAxis(pInfo->dev, index, label, min, max, res, min_res, max_res, mode);
@@ -632,7 +632,8 @@ static void wcmDevReadInput(InputInfoPtr pInfo)
 		if (!wcmReady(pInfo)) break;
 
 		/* dispatch */
-		wcmReadPacket(pInfo);
+		if (!wcmReadPacket(pInfo))
+			break;
 	}
 
 #ifdef DEBUG
@@ -649,7 +650,7 @@ static void wcmDevReadInput(InputInfoPtr pInfo)
 #endif
 }
 
-void wcmReadPacket(InputInfoPtr pInfo)
+Bool wcmReadPacket(InputInfoPtr pInfo)
 {
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
 	WacomCommonPtr common = priv->common;
@@ -672,7 +673,10 @@ void wcmReadPacket(InputInfoPtr pInfo)
 		if (errno != EAGAIN && errno != EINTR)
 			LogMessageVerbSigSafe(X_ERROR, 0,
 					      "%s: Error reading wacom device : %s\n", pInfo->name, strerror(errno));
-		return;
+		if (errno == ENODEV)
+			xf86RemoveEnabledDevice(pInfo);
+
+		return FALSE;
 	}
 
 	/* account for new data */
@@ -704,6 +708,8 @@ void wcmReadPacket(InputInfoPtr pInfo)
 	}
 
 	common->bufpos = len;
+
+	return TRUE;
 }
 
 int wcmDevChangeControl(InputInfoPtr pInfo, xDeviceCtl * control)
@@ -823,9 +829,7 @@ static void wcmUnlinkTouchAndPen(InputInfoPtr pInfo)
 static int wcmDevProc(DeviceIntPtr pWcm, int what)
 {
 	InputInfoPtr pInfo = (InputInfoPtr)pWcm->public.devicePrivate;
-#ifdef DEBUG
 	WacomDevicePtr priv = (WacomDevicePtr)pInfo->private;
-#endif
 	Status rc = !Success;
 
 	DBG(2, priv, "BEGIN dev=%p priv=%p "

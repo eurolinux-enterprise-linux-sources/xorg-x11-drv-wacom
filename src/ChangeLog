@@ -1,3 +1,661 @@
+commit 9d83956c2aa72b9d8744fa57e28ba5fe7f1af0f4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Mar 19 13:40:21 2018 -0700
+
+    wacom 0.36.1
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 25d765a543ea21d6fa686f16f55d475ad0f2d13b
+Author: Aaron Armstrong Skomra <skomra@gmail.com>
+Date:   Tue Mar 13 10:27:24 2018 -0700
+
+    Update README to reflect the move to Github.
+    
+    Signed-off-by: Aaron Armstrong Skomra <skomra@gmail.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit a197cc5e04c778022a78c010a22c9602591b7c2b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Mar 12 09:53:07 2018 -0700
+
+    Fail the Coverity build if their script cannot be downloaded
+    
+    If curl encounters an error trying to download the Coverity build script
+    (as seems to be happening at the moment due to SSL issues), we will not
+    be notified since the pipe swallows the error code. This is not ideal, so
+    this commit updates the Travis build steps to use a slightly more contrived
+    construction which will get and then execute the script as independent steps.
+    Also, to ensure curl returns an error code even in less-severe cases (e.g. a
+    basic 404 "Not Found") we add the '-f' option.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 414ee8130dd8b04512f38b7d9d29ecce3e30a86e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Feb 13 09:06:38 2018 -0800
+
+    Check both valid and working state when finding new channels
+    
+    The usbChooseChannel function is responsible for finding the channel
+    that should be used to contain a sequence of events for a particular
+    tool/contact. If a tool/contact is already using a particular channel
+    (i.e., the last event in the channel has the correct device type, serial
+    number, and is in proximity) then usbChooseChannel will return that
+    channel. Otherwise, usbChooseChannel will try to find a free channel
+    (i.e., one which is out of proximity) to be used to store the tool's
+    sequence of events.
+    
+    The existing logic has a subtle bug that may result in a malfunction
+    when a specific condition occurs. In particular, if a multitouch report
+    from the kernel contains an existing contact going up followed by a
+    brand new contact, then usbChooseChannel will see the channel associated
+    with the former contact as free and begin using it to store data for the
+    new contact. As a result, the "up" event is never sent and can lead to
+    further strange touch behavior (including the effective disabling of
+    touch input).
+    
+    To fix this, we modify usbChooseChannel to consider the "valid" state as
+    well as the working state when finding a new channel. A channel should
+    not be considered free if its valid state is still in prox, since this
+    indicates that the channel has *just* left prox. Note that we cannot
+    rely on only checking the valid state since this fails in the opposite
+    way: usbChooseChannel would not notice when a channel has *just* entered
+    prox and would overwrite its contents.
+    
+    It isn't obvious wether it is also necessary to check the valid state
+    for the other two cases in this function (finding an existing channel
+    and forcefully clearing channels when out of space). The existing code
+    seems to work, however, so we will leave it as-is.
+    
+    Ref: https://sourceforge.net/p/linuxwacom/bugs/335/?limit=25&page=1#73fe
+    Ref: https://sourceforge.net/p/linuxwacom/bugs/339/#f940
+    Ref: https://sourceforge.net/p/linuxwacom/bugs/349/
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 0c27df7057c94dea4edece3c3e1462ac2a19b7a5
+Author: Daniel Ferguson <danielferguson@me.com>
+Date:   Mon Mar 5 18:57:35 2018 +0000
+
+    Fix tilt-y being overridden with tilt-x
+    
+    Refactoring in (527fa95c29) introduced a typo in wcmFilterCoord which
+    resulted in the value of tilt x being assigned to tilt y.
+    
+    Ref: https://github.com/linuxwacom/xf86-input-wacom/issues/11
+    Fixes: 527fa95c29 ("Refactor coordinate averaging to seperate function")
+    Signed-off-by: Daniel Ferguson <danielferguson@me.com>
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 35047a3156be05b9ebc44ad4c43e0c9b62a85a03
+Author: Ping Cheng <pinglinux@gmail.com>
+Date:   Wed Jan 31 17:51:17 2018 -0800
+
+    Support DTK-2451 and DTH-2452 on older kernels
+    
+    Signed-off-by: Ping Cheng <ping.cheng@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit ffb3925cc1deb5d840ad4b2ba1ab853955d959c8
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jan 22 11:58:06 2018 -0800
+
+    wacom 0.36.0
+    
+    Signed-off-by: Jason Gerecke <killertofu@gmail.com>
+
+commit 32c065ae020da43dbe25ef650a9d8c496f5cbc55
+Author: Aaron Armstrong Skomra <skomra@gmail.com>
+Date:   Thu Jan 18 09:53:35 2018 -0800
+
+    add Github to release.sh script
+    
+    Require at least 1 of Github/Sourceforge.
+    
+    Ref: https://github.com/linuxwacom/xf86-input-wacom/issues/10
+    
+    Signed-off-by: Aaron Armstrong Skomra <skomra@gmail.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+    Reviewed-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 9f05aa04124e133a74ce69c1cb7cdce267bd8b1e
+Author: Aaron Armstrong Skomra <skomra@gmail.com>
+Date:   Thu Jan 18 09:53:34 2018 -0800
+
+    remove release script code from other projects
+    
+    Signed-off-by: Aaron Armstrong Skomra <skomra@gmail.com>
+    Reviewed-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 4cc67d161123774f79d5830cd87d7adddc31bf4c
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Jan 9 10:42:59 2018 -0800
+
+    wacom 0.35.99.1
+
+commit 685850060f1cef064a90e02191d4732f275c7179
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Dec 26 14:21:17 2017 -0800
+
+    Allocate 4 buttons for stylus devices (Pro Pen 3D)
+    
+    The Pro Pen 3D includes a third stylus button, reported from the kernel
+    as BTN_STYLUS3. Support for this event was added earlier, but the number
+    of buttons allocated was not updated. This meant that although the X
+    driver would properly set the button flag bit to indicate that a button
+    should be sent, a userspace event wouldn't actually be sent. This commit
+    increases the number of buttons allocated, causing the third button to
+    emit X11 button number 8 when pressed. This button can also be configured
+    through xsetwacom now that the driver allocates the correct number.
+    
+    Fixes: 4a96a58f26 ("Add support for kernel's new BTN_STYLUS3 event")
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit 4108d97fd7d0690d1d343bc0229b68b5fb48a6fc
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Dec 12 14:23:19 2017 -0800
+
+    Add support for Cintiq 27QHDT
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 6cb08771c882a22773a7b0caffff9d253ca65e70
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Oct 27 15:46:19 2017 -0700
+
+    Add support for Cintiq Pro 24/32
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 7b8e1150d599f0b4069f5c379bb162bf49b1d134
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Dec 13 08:06:09 2017 -0800
+
+    conf: Add preprobe fdi config to workaround EV_SW issues in HAL
+    
+    The HAL daemon used by RHEL6/CentOS6 does not play nicely with input
+    devices that advertise unsupported EV_SW events. Devices with such
+    an event will fail in the middle of the probe process, preventing
+    the X server from being able to hotplug the device. The SW_MUTE_DEVICE
+    event used by the Cintiq Pro touchscreen is such an event.
+    
+    To work around this limitation, we can define an fdi configuration file
+    which resets the "button.has_state" property prior to probe. Because
+    HAL only runs the failing code when this property is true, the device
+    is able to finish the probe process just as though it never had the
+    unsupported switch in the first place. Resetting this property does
+    prevent HAL from being able to monitor the switch state, but that is
+    not considered a problem.
+    
+    Since HAL is long-since deprecated, it doesn't make sense to install
+    this configuration file on systems which don't require it. This
+    commit also adds logic to configure.ac so that only systems which still
+    use HAL will install this file.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 6b68d40f6047e23651616403d5ff7ee563f42418
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Dec 21 10:03:19 2017 -0800
+
+    Be more strict about linking to already-linked devices
+    
+    The wcmLinkTouchAndPen function is responsible for associating the pen and
+    touch interfaces of a tablet. This association can be tripped up if multiple
+    devices with the same name are connected, so it includes code to prevent
+    linking to a device which already has been linked up. However, the condition
+    also checks that the device being considered is a tablet (i.e., stylus/eraser/
+    cursor; not pad/touch). This latter check seems nonsensical: it allows devices
+    to link to the first touch device they find, even if that device is already
+    linked up.
+    
+    Disallowing multiple links to the same device prevents all three pen/touch/pad
+    devices from having wcmTouchDevice set up, however. Leaving the stricter
+    condition as-is could cause devices to be linked up incorrectly (e.g. if the
+    X server has {touch1, pen1, pad1, touch2, pen2, pad2}, then touch1 and pen1
+    would get linked, but pad1 and touch2 would get linked, and pen2/pad2 left
+    unlinked!). To prevent this, we disallow linking of pad interfaces, which
+    should not be a problem since the pad shouldn't need to use the wcmTouchDevice
+    variable.
+    
+    Fixes: 8bb519ef2b ("Update wcmTouchDevice for touch interface")
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 21f498ef8b4ac826c6873ce9d54edcee313a0844
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Oct 24 08:44:34 2017 -0700
+
+    Implement "pan" scrolling functionality
+    
+    When enabled through `xsetwacom set <id> button <n> pan`, this causes the driver
+    to appear to "drag" scrollable window contents by emitting appropriate scroll
+    events as the pen is dragged around.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 36ec4c098a89170f5f76d8e0ad250f9d6405a69f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Dec 19 10:09:51 2017 -0800
+
+    Pass current WacomDeviceState through to sendAction
+    
+    This commit refactors the signature of the sendAction function to take a
+    WacomDeviceState pointer. This change makes it easier to implement the
+    following pan/scroll patch.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 28c1d6d9ed0624b7a3fb007f764e05e0e2906e24
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Nov 28 15:07:26 2017 -0800
+
+    tools: Prevent use of invalid (negative) fd
+    
+    If something goes wrong when a tool attempts to open a device, we print
+    an error but then continue on as though nothing happended and provide
+    the fd to both the ioctl() and close() functions. This commit ensures
+    we don't actually try to use the fd.
+    
+    Coverity-id: 208168
+    Fixes: 3546d8ab1b ("tools: add isdv4-serial-debugger test program.")
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 4a24a94d3ae2396b297a6dab4b350bd5da26d44e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Dec 7 17:01:51 2017 -0800
+
+    Add Coverity integration to .travis.yml
+    
+    Adds the ability to run a Coverity scan from Travis. Since there are a
+    limited number of times per week that Coverity can be used, we only
+    run it when Travis has the DO_COVERITY environment variable set to "YES".
+    This can either be set manually through the Travis' interface, but will
+    also be set for cron-triggered jobs.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 2c191f041d658d83aa86b72cc49540a3387bb61a
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Dec 8 13:55:33 2017 -0800
+
+    Reset filter when tip is touched to tablet
+    
+    Coordinate averaging is useful for producing smooth strokes, but this
+    averaging can cause button events to be sent at the wrong location.
+    In particular, when making a series of quick strokes with an AES pen,
+    the actual location the pen contacts the display can be some distance
+    away from the first (low-quality) position report. This can result in
+    "hook" artifacts if it is still influencing the averaged pointer
+    position when the pen goes down. This can also be seen if the RawSample
+    parameter is increased significantly.
+    
+    To prevent these artifacts from appearing, we reset the averaging filter
+    whenever the tip is pressed. This ensures that the event event is sent
+    at the pen's actual location, plus or minus some (probably smaller) noise.
+    In theory these artifacts could still appear if drawing were triggered
+    by a button other than the tip, but that would be a quite non-standard
+    setup.
+    
+    https://sourceforge.net/p/linuxwacom/bugs/338/
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit ce72a0048b56089f3946f9bc90163fcad7222f86
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Dec 15 13:12:28 2017 -0800
+
+    Move 'suppress' variable from wcmEvent to commonDispatchDevice
+    
+    Resolves the following compile-time warning:
+    
+    ../src/wcmCommon.c: In function ‘wcmEvent’:
+    ../src/wcmCommon.c:1007:23: error: ‘suppress’ may be used uninitialized in this function [-Werror=maybe-uninitialized]
+       commonDispatchDevice(pInfo, pChannel, suppress);
+                           ^
+    
+    Fixes: 2fa4ef48c9 ("Do not overwrite raw device state with filtered coordinate values")
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 2fa4ef48c98860859d48810d870567fe99b5d76f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Dec 8 13:55:32 2017 -0800
+
+    Do not overwrite raw device state with filtered coordinate values
+    
+    By performing coordinate filtering in wcmEvent and overwriting the raw
+    device state stored in pChannel, we loose the ability to see the actual
+    (but noisy) hardware coordinates at later points in the code. By moving
+    this filtering into commonDispatchDevice we can apply the result to only
+    the 'filtered' DeviceState sample that is ultimately passed along to
+    wcmSendEvents.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit 527fa95c29f6aee2c2d655e834ff3f45a9160c06
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Dec 8 13:55:31 2017 -0800
+
+    Refactor coordinate averaging to seperate function
+    
+    Moves the averaging code used by the driver's filter functions into a
+    seperate function to make the operation of wcm_filter_coord more clear.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit 7d6bded43bab93f8cc882c4e8b0fdc834e44208e
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Dec 7 14:20:59 2017 -0800
+
+    Use git-version-gen for build-time version strings
+    
+    Currently the driver uses macros like PACKAGE_VERSION whenever it needs
+    to print out a version string. These macros are only updated whenever
+    the autoconf.sh script is run, however. As a practical result, this means
+    that the version information which is built into development versions of
+    the driver is often inaccurate. To fix this, we define a new BUILD_VERSION
+    macro which is updated whenever git reports a changed version number.
+    
+    In addition to having `xsetwacom -V` report the precise build, we also
+    have the X log print out the build number to augment the MAJOR/MINOR/PATCH
+    data that is normally printed.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 061519df07f23f96b5211ba71a851bb626881fb4
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Nov 16 15:09:48 2017 -0800
+
+    Build tools with AM_CFLAGS and its warnings
+    
+    The Makefile.am contained under the tools subdirectory makes use of an
+    Automake feature that allows the definition of per-executable CFLAGS.
+    These CFLAGS definitions do not automatically include the general-use
+    AM_CFLAGS. This has resulted in these executables not being built with
+    the intentended warnings/errors enabled. Note that we also explicitly
+    add "-Wno-error" to the definition of the "xsetwacom-test" binary since
+    we don't want warnings there to break anything.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit 346c6392f48bf34484f45df5aa2425e90f9ecf30
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Nov 13 16:23:43 2017 -0800
+
+    Remove no-longer-necessary "Wno-error" exceptions from Travis
+    
+    The missing-field-initializers cast-qual warnings had to be excepted out
+    from the Travis build since code in xsetwacom would trigger them. These
+    issues have been resolved by the last two commits, allowing us to remove
+    the exceptions.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit b380cf93a448fa1636c413fff600a4869e6e7564
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Nov 13 16:14:14 2017 -0800
+
+    xsetwacom: Don't drop "const" when performing a cast
+    
+    GCC warns that we're droping the "const" attribute in one of our casts.
+    Looking at the affected function, it is obvious that the cast is entirely
+    unnecessary and can be dropped entirely.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit 43a02abb08c23d25a10d695cea8c15abd74bc56b
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Nov 13 16:08:52 2017 -0800
+
+    xsetwacom: Use explicit NULL for final element of 'parameters' array
+    
+    C does not strictly allow an empty initializer list `{}`, which can
+    result in missing-field-initializers warnings from the compiler. All
+    consumers of this array cycle through until they see a NULL name, so
+    this commit replaces the empty initializer with { .name = NULL }.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit c0cce4c14cbda8b5ff89548a40418ff3a42f7274
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Nov 13 15:47:34 2017 -0800
+
+    Add Travis-CI integration
+    
+    Adds a .travis.yml file which allows the Travis-CI service to build and
+    test the project. This should ensure we're immediately warned of potential
+    issues even if someone forgets to run the test suite before pushing. The
+    build is performed with "-Wall -Wextra -Werror" (with only a handful of
+    currently-necessary exceptions) on both GCC and Clang.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 4a96a58f2693b291b91e21b7e34f5c5e04015f3f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Tue Oct 3 13:45:37 2017 -0700
+
+    Add support for kernel's new BTN_STYLUS3 event
+    
+    BTN_STYLUS3 was (will be) added to the Linux 4.15 kernel to support the
+    third button present on Wacom's "Pro Pen 3D" stylus. This commit adds
+    support for this new event, mapping it to mouse button 8 ("navigate
+    back"). Remapping this button to a different function is possible by
+    using commands like `xsetwacom set <id> button 8 <action>`.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 48c2cd83ccf797fe618a48a743afee35883aecf9
+Author: Benjamin Tissoires <benjamin.tissoires@gmail.com>
+Date:   Fri Nov 3 15:19:24 2017 +0100
+
+    conf: add Dell Canvas 27 touch
+    
+    The Dell canvas 27 is an external monitor with pen and touch, but the
+    pen is provided by Wacom, and the touch by Advanced Silicon.
+    To have proper touch arbitration, we need to force xf86-input-wacom
+    to also handle the touch part.
+    
+    Signed-off-by: Benjamin Tissoires <benjamin.tissoires@gmail.com>
+    Reviewed-By: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 2456f821ba368fae5c084b44e86b8754187670c0
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed Sep 13 10:46:10 2017 -0700
+
+    xsetwacom: Recognize 'AltGr' key as synonym for 'ISO_Level3_Shift'
+    
+    The table of keysyms does not include an obvious synonym for the "AltGr"
+    key that is found on some international keyboard layouts. It seems that
+    "ISO_Level3_Shift" is the magic name that should typically be used.
+    
+    https://sourceforge.net/p/linuxwacom/bugs/344/
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit b30e2d27fdb30ff4b425fc62432cab636fe163b9
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 10 15:35:43 2017 -0700
+
+    Correct device flags for multiple devices
+    
+    The device flags set in wcmDeviceTypeKeys must be set properly in order
+    for the driver to correctly identify and use specific tablet features.
+    Several devices are missing flags that e.g. indicate they support
+    pen rotation or have touch rings.
+    
+    Fixes: 0318b1c ("Support recent display devices on older kernels")
+    Fixes: 3578b91 ("Add support for Cintiq 22HDT and 13HD, DTK2241 and DTH2242.")
+    Fixes: df7f165 ("Add tablet_type to WacomModel")
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit 1a2a23c2df0ec0fd0bf46432db58f32914a6a09f
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Aug 10 15:34:29 2017 -0700
+
+    Add support for 2nd-generation Intuos Pro
+    
+    This tablet is usable without this patch, but the device type is missing
+    the WCM_RING flag. This prevents the ring valuator from being initialized
+    correctly, and in turn causes recent versions of gnome-control-center to
+    not allow configuration of the ring.
+    
+    https://bugzilla.gnome.org/show_bug.cgi?id=785358
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit 912611608b3ba892a7c26d1be81209f4e5b009d5
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jul 18 08:41:37 2017 +1000
+
+    Remove the device's fd from the select() set when we get ENODEV
+    
+    If the device is unplugged, the fd triggers in select/poll/... but comes back
+    with ENODEV. This triggers a lot of error messages in the log until finally
+    the udev code catches up with us and the device is removed properly.
+    
+    Catch that case by removing the fd from the select() set so we don't get
+    triggered to call read_input on it anymore.
+    
+    https://sourceforge.net/p/linuxwacom/bugs/337/
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Tested-by: crocket <crockabiscuit@gmail.com>
+    Reviewed-by: Ping Cheng <ping.cheng@wacom.com>
+
+commit b0a055425dfb983163b1d3c673a36aebf9536430
+Author: Aaron Armstrong Skomra <skomra@gmail.com>
+Date:   Thu Jul 13 12:08:03 2017 -0700
+
+    Support DTH-1152 on older kernels
+    
+    Signed-off-by: Aaron Armstrong Skomra <aaron.skomra@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 4bf1f36791ba5a2ad7e59fe7257f0893b40f4e7d
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Mon Jun 26 15:08:47 2017 -0700
+
+    wacom 0.35.0
+
+commit 60edf6341fed25ec0df6d07be6ade31ca960d607
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 16 14:12:15 2017 -0700
+
+    wacom 0.34.99.1
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 7bfbf8ed5a82e78a8235275c15e8934b02879f37
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Fri Jun 16 14:50:19 2017 -0700
+
+    test: Update test_normalize_pressure to work with maxCurve
+    
+    Commit d958ab79d2 changes the driver's pressure normalization functions
+    to use a variable "maxCurve" which defines the upper limit of pressure
+    values to be emitted by the driver, rather than using FILTER_PRESSURE_RES
+    directly. The tests were never updated to take this into account and
+    fail due to maxCurve never being set.
+    
+    This patch has the normalize_pressure test set the value of maxCurve.
+    While we're at it, we have the test verify that multiple values of
+    maxCurve work as expected.
+    
+    Fixes: d958ab79d2 (Introduce "Pressure2K" config option for incompatible software)
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit d958ab79d21b57141415650daac88f9369a1c861
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Wed May 31 10:57:12 2017 +1000
+
+    Introduce "Pressure2K" config option for incompatible software
+    
+    It appears that some software may not be entirely compatible with the
+    expanded 65K pressure level range that was introduced in version 0.34.0.
+    Although our driver advertises the larger range in XI2 (and toolkits
+    like GTK+2/3 and Qt3/4/5 make use of it), there have been reports of
+    other software (e.g. The Foundry's "NUKE") misbehaving.
+    
+    As a workaround, this patch introduces a new boolean config option named
+    "Pressure2K". If enabled, it causes the driver to revert to its prior
+    behavior of using a pressure range of 0-2047. This option is disabled by
+    default, but can be turned on by adding the following configuration
+    snippet to a new file in the /etc/X11/xorg.conf.d directory:
+    
+    Section "InputClass"
+        Identifier "Wacom pressure compatibility"
+        MatchDriver "wacom"
+        Option "Pressure2K" "true"
+    EndSection
+    
+    Ref: https://sourceforge.net/p/linuxwacom/mailman/message/35857403/
+    Ref: 3e56ce4429 (Increase full-scale pressure range from 0..2047 to 0..65535)
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 0318b1cda79261d73f04676dd662f98c84711747
+Author: Aaron Armstrong Skomra <skomra@gmail.com>
+Date:   Tue May 2 09:48:56 2017 -0700
+
+    Support recent display devices on older kernels
+    
+    Older kernels like 2.6.30 will end up with touches
+    interpreted as relative events unless these devices
+    are explicitly added.
+    
+    Signed-off-by: Aaron Armstrong Skomra <aaron.skomra@wacom.com>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 252f276ea9f1a2543a7504857b702b4e50e90508
+Author: Sebastian Reuße <seb@wirrsal.net>
+Date:   Wed May 10 20:16:07 2017 +0200
+
+    xsetwacom: use XkbGetMap instead of XkbGetKeyboard
+    
+    XkbGetMap is more robust in cases where certain keyboard description components
+    are missing. XkbGetKeyboard will fail when any component cannot be resolved;
+    since XkbAllComponentsMask is requested, any missing component will result in
+    the call returning NULL. Since we don’t necessarily need all components (e.g.,
+    keyboard geometry, keymap names), we use XkbGetMap instead.
+    
+    Signed-off-by: Sebastian Reuße <seb@wirrsal.net>
+    Reviewed-by: Peter Hutterer <peter.hutterer@who-t.net>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 7f6658af6f1a4e22adddd6fd931edb8870dbafc0
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 13 08:50:53 2017 +1000
+
+    Fix build with #ifdef DEBUG disabled
+    
+    Introduced in de650d6224
+    
+    Reported-by: Matt Turner <mattst88@gmail.com>
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
 commit 267e74cd1325f250185ced951914220bc4287ecf
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Mar 9 08:30:39 2017 +1000

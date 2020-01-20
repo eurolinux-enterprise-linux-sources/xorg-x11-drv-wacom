@@ -91,7 +91,7 @@ DEFINE_MODEL(usbGraphire4,	"USB Graphire4",	4);
 DEFINE_MODEL(usbBamboo,		"USB Bamboo",		4);
 DEFINE_MODEL(usbBamboo1,	"USB Bamboo1",		4);
 DEFINE_MODEL(usbBambooFun,	"USB BambooFun",	4);
-DEFINE_MODEL(usbCintiq,		"USB PL/Cintiq",	4);
+DEFINE_MODEL(usbCintiq,		"USB PL/Cintiq/DTU",	4);
 DEFINE_MODEL(usbCintiqPartner,	"USB CintiqPartner",	4);
 DEFINE_MODEL(usbIntuos,		"USB Intuos1",		5);
 DEFINE_MODEL(usbIntuos2,	"USB Intuos2",		5);
@@ -167,7 +167,7 @@ static unsigned short padkey_codes [] = {
 /* Fixed mapped stylus and mouse buttons */
 
 #define WCM_USB_MAX_MOUSE_BUTTONS 5
-#define WCM_USB_MAX_STYLUS_BUTTONS 3
+#define WCM_USB_MAX_STYLUS_BUTTONS 4
 
 static unsigned short mouse_codes [] = {
 	BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, BTN_BACK, BTN_FORWARD,
@@ -232,6 +232,11 @@ static struct WacomModelDesc
 	{ WACOM_VENDOR_ID, 0xC7, 100000, 100000, &usbCintiq,     "DTU1931"		},
 	{ WACOM_VENDOR_ID, 0xCE, 100000, 100000, &usbCintiq,     "DTU2231"		},
 	{ WACOM_VENDOR_ID, 0xF0, 100000, 100000, &usbCintiq,     "DTU1631"		},
+	{ WACOM_VENDOR_ID, 0x35a, 100000, 100000, &usbCintiq,    "DTH1152"              },
+	{ WACOM_VENDOR_ID, 0x368, 100000, 100000, &usbCintiq,    "DTH1152"              }, /* Touch */
+	{ WACOM_VENDOR_ID, 0x382, 100000, 100000, &usbCintiq,    "DTK2451"              },
+	{ WACOM_VENDOR_ID, 0x37D, 100000, 100000, &usbCintiq,    "DTH2452"              },
+	{ WACOM_VENDOR_ID, 0x37E, 100000, 100000, &usbCintiq,    "DTH2452"              }, /* Touch */
 
 	{ WACOM_VENDOR_ID, 0x41, 100000, 100000, &usbIntuos2,    "Intuos2 4x5"		},
 	{ WACOM_VENDOR_ID, 0x42, 100000, 100000, &usbIntuos2,    "Intuos2 6x8"		},
@@ -287,6 +292,21 @@ static struct WacomModelDesc
 	{ WACOM_VENDOR_ID, 0x57, 200000, 200000, &usbCintiqV5,   "DTK2241"		},
 	{ WACOM_VENDOR_ID, 0x59, 200000, 200000, &usbCintiqV5,   "DTH2242"		},
 	{ WACOM_VENDOR_ID, 0x5B, 200000, 200000, &usbCintiqV5,   "Cintiq 22HDT"		},
+	{ WACOM_VENDOR_ID, 0x32B, 200000, 200000, &usbCintiqV5,  "Cintiq 27QHDT"	},
+	{ WACOM_VENDOR_ID, 0x32C, 200000, 200000, &usbCintiqV5,  "Cintiq 27QHDT"	}, /* Touch */
+	{ WACOM_VENDOR_ID, 0x34A, 200000, 200000, &usbCintiqV5,  "Mobilestudio Pro 13"	}, /* Touch */
+	{ WACOM_VENDOR_ID, 0x34B, 200000, 200000, &usbCintiqV5,  "MobileStudio Pro 16"	}, /* Touch */
+	{ WACOM_VENDOR_ID, 0x34D, 200000, 200000, &usbCintiqV5,  "MobileStudio Pro 13"	},
+	{ WACOM_VENDOR_ID, 0x34E, 200000, 200000, &usbCintiqV5,  "MobileStudio Pro 16"	},
+	{ WACOM_VENDOR_ID, 0x34F, 200000, 200000, &usbCintiqV5,  "Cintiq 13 FHD Pro"	},
+	{ WACOM_VENDOR_ID, 0x350, 200000, 200000, &usbCintiqV5,  "Cintiq 16 UHD Pro"	},
+	{ WACOM_VENDOR_ID, 0x351, 200000, 200000, &usbCintiqV5,  "Cintiq Pro 24"	},
+	{ WACOM_VENDOR_ID, 0x352, 200000, 200000, &usbCintiqV5,  "Cintiq Pro 32"	},
+	{ WACOM_VENDOR_ID, 0x353, 200000, 200000, &usbCintiqV5,  "Cintiq 13 FHD Pro"	}, /* Touch */
+	{ WACOM_VENDOR_ID, 0x354, 200000, 200000, &usbCintiqV5,  "Cintiq 16 UHD Pro"	}, /* Touch */
+	{ WACOM_VENDOR_ID, 0x355, 200000, 200000, &usbCintiqV5,  "Cintiq Pro 24"	}, /* Touch */
+	{ WACOM_VENDOR_ID, 0x356, 200000, 200000, &usbCintiqV5,  "Cintiq Pro 32"	}, /* Touch */
+	{ WACOM_VENDOR_ID, 0x37C, 200000, 200000, &usbCintiqV5,  "Cintiq Pro 24"	}, /* Pen-only model */
 
 	{ WACOM_VENDOR_ID, 0x90, 100000, 100000, &usbTabletPC,   "TabletPC 0x90"	},
 	{ WACOM_VENDOR_ID, 0x93, 100000, 100000, &usbTabletPC,   "TabletPC 0x93"	},
@@ -463,7 +483,7 @@ static Bool usbWcmInit(InputInfoPtr pInfo, char* id, size_t id_len, float *versi
 	/* nbuttons tracks maximum buttons on all tools (stylus/mouse).
 	 *
 	 * Mouse support left, middle, right, side, and extra side button.
-	 * Stylus support tip and 2 stlyus buttons.
+	 * Stylus support tip and 3 stylus buttons.
 	 */
 	if (ISBITSET (common->wcmKeys, BTN_TOOL_MOUSE))
 		usbdata->nbuttons = WCM_USB_MAX_MOUSE_BUTTONS;
@@ -912,7 +932,8 @@ static int usbChooseChannel(WacomCommonPtr common, int device_type, unsigned int
 			if (i == PAD_CHANNEL)
 				continue;
 
-			if (!common->wcmChannel[i].work.proximity)
+			if (!common->wcmChannel[i].work.proximity &&
+			    !common->wcmChannel[i].valid.state.proximity)
 			{
 				channel = i;
 				memset(&common->wcmChannel[channel],0, sizeof(WacomChannel));
@@ -1442,6 +1463,10 @@ static void usbParseKeyEvent(WacomCommonPtr common,
 
 		case BTN_STYLUS2:
 			ds->buttons = mod_buttons(ds->buttons, 2, event->value);
+			break;
+
+		case BTN_STYLUS3:
+			ds->buttons = mod_buttons(ds->buttons, 3, event->value);
 			break;
 
 		default:

@@ -63,6 +63,7 @@ static int wcmAllocate(InputInfoPtr pInfo)
 	priv->pInfo = pInfo;
 	priv->common = common;       /* common info pointer */
 	priv->oldCursorHwProx = 0;   /* previous cursor hardware proximity */
+	priv->maxCurve = FILTER_PRESSURE_RES;
 	priv->nPressCtrl [0] = 0;    /* pressure curve x0 */
 	priv->nPressCtrl [1] = 0;    /* pressure curve y0 */
 	priv->nPressCtrl [2] = 100;  /* pressure curve x1 */
@@ -491,6 +492,12 @@ static Bool wcmLinkTouchAndPen(InputInfoPtr pInfo)
 	WacomCommonPtr tmpcommon = NULL;
 	WacomDevicePtr tmppriv = NULL;
 
+	if (IsPad(priv))
+	{
+		DBG(4, priv, "No need to link up pad devices.\n");
+		return FALSE;
+	}
+
 	/* Lookup to find the associated pen and touch */
 	for (; device != NULL; device = device->next)
 	{
@@ -503,7 +510,7 @@ static Bool wcmLinkTouchAndPen(InputInfoPtr pInfo)
 		DBG(4, priv, "Considering link with %s...\n", tmppriv->name);
 
 		/* already linked devices */
-		if (tmpcommon->wcmTouchDevice && IsTablet(tmppriv))
+		if (tmpcommon->wcmTouchDevice)
 		{
 			DBG(4, priv, "A link is already in place. Ignoring.\n");
 			continue;
@@ -737,6 +744,7 @@ static pointer wcmPlug(pointer module, pointer options, int* errmaj,
 {
 	xf86AddInputDriver(&WACOM, module, 0);
 
+	xf86Msg(X_INFO, "Build version: " BUILD_VERSION "\n");
 	usbListModels();
 
 	return module;

@@ -472,6 +472,15 @@ static param_t parameters[] =
 		.prop_flags = PROP_FLAG_BOOLEAN
 	},
 	{
+		.name = "PanScrollThreshold",
+		.x11name = "PanScrollThreshold",
+		.desc = "Adjusts distance required for pan actions to generate a scroll event",
+		.prop_name = WACOM_PROP_PANSCROLL_THRESHOLD,
+		.prop_format = 32,
+		.prop_offset = 0,
+		.arg_count = 1,
+	},
+	{
 		.name = "MapToOutput",
 		.desc = "Map the device to the given output. ",
 		.set_func = set_output,
@@ -484,7 +493,7 @@ static param_t parameters[] =
 		.get_func = get_all,
 		.prop_flags = PROP_FLAG_READONLY,
 	},
-	{}
+	{.name = NULL}
 };
 
 /**
@@ -580,6 +589,8 @@ static struct modifier modifiers[] = {
 	{"hyper", "Hyper_L"},
 	{"lhyper", "Hyper_L"},
 	{"rhyper", "Hyper_R"},
+
+	{"altgr", "ISO_Level3_Shift"},
 
 	{ NULL, NULL }
 };
@@ -751,8 +762,7 @@ static void usage(void)
 
 static void version(void)
 {
-	printf("%d.%d.%d\n", PACKAGE_VERSION_MAJOR, PACKAGE_VERSION_MINOR,
-			     PACKAGE_VERSION_PATCHLEVEL);
+	printf(BUILD_VERSION "\n");
 }
 
 static XDevice* find_device(Display *display, char *name)
@@ -983,7 +993,7 @@ static const char *convert_specialkey(const char *specialkey)
 			m++;
 	}
 
-	return m->converted ? m->converted : (char*)specialkey;
+	return m->converted ? m->converted : specialkey;
 }
 
 /**
@@ -1010,6 +1020,7 @@ static int special_map_button(Display *dpy, int argc, char **argv, unsigned long
 static int special_map_core(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
+static int special_map_panscroll(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 
 /* Valid keywords for the --set ButtonX options */
 static struct keywords {
@@ -1021,6 +1032,7 @@ static struct keywords {
 	{"core", special_map_core},
 	{"modetoggle", special_map_modetoggle},
 	{"displaytoggle", special_map_displaytoggle},
+	{"pan", special_map_panscroll},
 	{ NULL, NULL }
 };
 
@@ -1062,6 +1074,19 @@ static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsign
 			"anymore and will be ignored.\n");
 		once_only = 0;
 	}
+	return 0;
+}
+
+static int special_map_panscroll(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size)
+{
+	if (*ndata + 1 > size) {
+		fprintf(stderr, "Insufficient space to store all commands.\n");
+		return 0;
+	}
+	data[*ndata] = AC_PANSCROLL;
+
+	*ndata += 1;
+
 	return 0;
 }
 
@@ -1173,9 +1198,12 @@ static int keysym_to_keycode(Display *dpy, KeySym sym)
 	XkbStateRec state;
 	int kc = 0;
 
-
 	if (!xkb)
-		xkb = XkbGetKeyboard(dpy, XkbAllComponentsMask, XkbUseCoreKbd);
+		xkb = XkbGetMap(dpy, XkbAllComponentsMask, XkbUseCoreKbd);
+	if (!xkb) {
+		fprintf(stderr, "Warning: failed to query keyboard map\n");
+		goto out;
+	}
 	XkbGetState(dpy, XkbUseCoreKbd, &state);
 
 	for (kc = xkb->min_key_code; kc <= xkb->max_key_code; kc++)
@@ -2974,7 +3002,7 @@ static void test_parameter_number(void)
 	 * deprecated them.
 	 * Numbers include trailing NULL entry.
 	 */
-	assert(ARRAY_SIZE(parameters) == 39);
+	assert(ARRAY_SIZE(parameters) == 40);
 	assert(ARRAY_SIZE(deprecated_parameters) == 17);
 }
 

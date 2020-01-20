@@ -56,10 +56,9 @@ static int *VCOPY(const int *valuators, int nvals)
 
 static int applyPressureCurve(WacomDevicePtr pDev, const WacomDeviceStatePtr pState);
 static void commonDispatchDevice(InputInfoPtr pInfo,
-				 const WacomChannelPtr pChannel,
-				 enum WacomSuppressMode suppress);
-static void sendAButton(InputInfoPtr pInfo, int button, int mask,
-			int first_val, int num_vals, int *valuators);
+				 const WacomChannelPtr pChannel);
+static void sendAButton(InputInfoPtr pInfo,  const WacomDeviceState* ds, int button,
+			int mask, int first_val, int num_vals, int *valuators);
 
 /*****************************************************************************
  * Utility functions
@@ -89,13 +88,57 @@ void set_absolute(InputInfoPtr pInfo, Bool absolute)
 		priv->flags &= ~ABSOLUTE_FLAG;
 }
 
+static int wcmButtonPerNotch(WacomDevicePtr priv, int value, int threshold, int btn_positive, int btn_negative)
+{
+	int mode = is_absolute(priv->pInfo);
+	int notches = value / threshold;
+	int button = (notches > 0) ? btn_positive : btn_negative;
+	int i;
+
+	for (i = 0; i < abs(notches); i++) {
+		xf86PostButtonEventP(priv->pInfo->dev, mode, button, 1, 0, 0, 0);
+		xf86PostButtonEventP(priv->pInfo->dev, mode, button, 0, 0, 0, 0);
+	}
+
+	return value % threshold;
+}
+
+static void wcmPanscroll(WacomDevicePtr priv, const WacomDeviceState *ds)
+{
+	WacomCommonPtr common = priv->common;
+	int threshold = common->wcmPanscrollThreshold;
+	int *accumulated_x, *accumulated_y;
+
+	if (!(priv->flags & SCROLLMODE_FLAG) || !(ds->buttons & 1))
+		return;
+
+	/* Tip has gone down down; store state for dragging */
+	if (!(priv->oldState.buttons & 1)) {
+		priv->wcmPanscrollState = *ds;
+		priv->wcmPanscrollState.x = 0;
+		priv->wcmPanscrollState.y = 0;
+		return;
+	}
+
+	accumulated_x = &priv->wcmPanscrollState.x;
+	accumulated_y = &priv->wcmPanscrollState.y;
+
+	*accumulated_x += (ds->x - priv->oldState.x);
+	*accumulated_y += (ds->y - priv->oldState.y);
+
+	DBG(6, priv, "pan x = %d, pan y = %d\n", *accumulated_x, *accumulated_y);
+
+	*accumulated_x = wcmButtonPerNotch(priv, *accumulated_x, threshold, 6, 7);
+	*accumulated_y = wcmButtonPerNotch(priv, *accumulated_y, threshold, 4, 5);
+}
+
 /*****************************************************************************
  * wcmSendButtons --
  *   Send button events by comparing the current button mask with the
  *   previous one.
  ****************************************************************************/
 
-static void wcmSendButtons(InputInfoPtr pInfo, int buttons,
+static void wcmSendButtons(InputInfoPtr pInfo, const WacomDeviceState* ds, int buttons,
 			   int first_val, int num_vals, int *valuators)
 {
 	unsigned int button, mask, first_button;
@@ -136,7 +179,7 @@ static void wcmSendButtons(InputInfoPtr pInfo, int buttons,
 	{
 		mask = 1u << button;
 		if ((mask & priv->oldState.buttons) != (mask & buttons))
-			sendAButton(pInfo, button, (mask & buttons),
+			sendAButton(pInfo, ds, button, (mask & buttons),
 					first_val, num_vals, valuators);
 	}
 
@@ -166,10 +209,11 @@ static int countPresses(int keybtn, unsigned int* keys, int size)
 	return count;
 }
 
-static void sendAction(InputInfoPtr pInfo, int press,
-		       unsigned int *keys, int nkeys,
+static void sendAction(InputInfoPtr pInfo,  const WacomDeviceState* ds,
+		       int press, unsigned int *keys, int nkeys,
 		       int first_val, int num_val, int *valuators)
 {
+	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 	int i;
 
 	/* Actions only trigger on press, not release */
@@ -186,10 +230,15 @@ static void sendAction(InputInfoPtr pInfo, int press,
 				{
 					int btn_no = (action & AC_CODE);
 					int is_press = (action & AC_KEYBTNPRESS);
-					xf86PostButtonEventP(pInfo->dev,
-							    is_absolute(pInfo), btn_no,
-							    is_press, first_val, num_val,
-							    VCOPY(valuators, num_val));
+					if (btn_no == 1 && (priv->flags & SCROLLMODE_FLAG)) {
+						/* Don't send clicks in scroll mode */
+					}
+					else {
+						xf86PostButtonEventP(pInfo->dev,
+								    is_absolute(pInfo), btn_no,
+								    is_press, first_val, num_val,
+								    VCOPY(valuators, num_val));
+					}
 				}
 				break;
 			case AC_KEY:
@@ -203,6 +252,12 @@ static void sendAction(InputInfoPtr pInfo, int press,
 				if (press)
 					wcmDevSwitchModeCall(pInfo,
 							(is_absolute(pInfo)) ? Relative : Absolute); /* not a typo! */
+				break;
+			case AC_PANSCROLL:
+				priv->flags |= SCROLLMODE_FLAG;
+				priv->wcmPanscrollState = *ds;
+				priv->wcmPanscrollState.x = 0;
+				priv->wcmPanscrollState.y = 0;
 				break;
 		}
 	}
@@ -240,8 +295,11 @@ static void sendAction(InputInfoPtr pInfo, int press,
 					if (countPresses(key_code, &keys[i], nkeys - i))
 						wcmEmitKeycode(pInfo->dev, key_code, 0);
 				}
+				break;
+			case AC_PANSCROLL:
+				priv->flags &= ~SCROLLMODE_FLAG;
+				break;
 		}
-
 	}
 }
 
@@ -249,8 +307,8 @@ static void sendAction(InputInfoPtr pInfo, int press,
  * sendAButton --
  *   Send one button event, called by wcmSendButtons
  ****************************************************************************/
-static void sendAButton(InputInfoPtr pInfo, int button, int mask,
-			int first_val, int num_val, int *valuators)
+static void sendAButton(InputInfoPtr pInfo, const WacomDeviceState* ds, int button,
+			int mask, int first_val, int num_val, int *valuators)
 {
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 #ifdef DEBUG
@@ -263,7 +321,7 @@ static void sendAButton(InputInfoPtr pInfo, int button, int mask,
 	if (!priv->keys[button][0])
 		return;
 
-	sendAction(pInfo, (mask != 0), priv->keys[button],
+	sendAction(pInfo, ds, (mask != 0), priv->keys[button],
 		   ARRAY_SIZE(priv->keys[button]),
 		   first_val, num_val, valuators);
 }
@@ -345,11 +403,11 @@ TEST_NON_STATIC int getWheelButton(int delta, int action_up, int action_dn)
  * @param num_vals
  * @param valuators
  */
-static void sendWheelStripEvent(unsigned int *action, int nactions, InputInfoPtr pInfo,
-                                int first_val, int num_vals, int *valuators)
+static void sendWheelStripEvent(unsigned int *action, const WacomDeviceState* ds, int nactions,
+				InputInfoPtr pInfo, int first_val, int num_vals, int *valuators)
 {
-	sendAction(pInfo, 1, action, nactions, first_val, num_vals, valuators);
-	sendAction(pInfo, 0, action, nactions, first_val, num_vals, valuators);
+	sendAction(pInfo, ds, 1, action, nactions, first_val, num_vals, valuators);
+	sendAction(pInfo, ds, 0, action, nactions, first_val, num_vals, valuators);
 }
 
 /*****************************************************************************
@@ -372,7 +430,7 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Left touch strip scroll delta = %d\n", delta);
-		sendWheelStripEvent(priv->strip_keys[idx], ARRAY_SIZE(priv->strip_keys[idx]),
+		sendWheelStripEvent(priv->strip_keys[idx], ds, ARRAY_SIZE(priv->strip_keys[idx]),
 		                    pInfo, first_val, num_vals, valuators);
 	}
 
@@ -382,7 +440,7 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Right touch strip scroll delta = %d\n", delta);
-		sendWheelStripEvent(priv->strip_keys[idx], ARRAY_SIZE(priv->strip_keys[idx]),
+		sendWheelStripEvent(priv->strip_keys[idx], ds, ARRAY_SIZE(priv->strip_keys[idx]),
 		                    pInfo, first_val, num_vals, valuators);
 	}
 
@@ -392,7 +450,7 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	if (idx >= 0 && (IsCursor(priv) || IsPad(priv)) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Relative wheel scroll delta = %d\n", delta);
-		sendWheelStripEvent(priv->wheel_keys[idx], ARRAY_SIZE(priv->wheel_keys[idx]),
+		sendWheelStripEvent(priv->wheel_keys[idx], ds, ARRAY_SIZE(priv->wheel_keys[idx]),
 		                    pInfo, first_val, num_vals, valuators);
 	}
 
@@ -402,7 +460,7 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Left touch wheel scroll delta = %d\n", delta);
-		sendWheelStripEvent(priv->wheel_keys[idx], ARRAY_SIZE(priv->wheel_keys[idx]),
+		sendWheelStripEvent(priv->wheel_keys[idx], ds, ARRAY_SIZE(priv->wheel_keys[idx]),
 		                    pInfo, first_val, num_vals, valuators);
 	}
 
@@ -412,7 +470,7 @@ static void sendWheelStripEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	if (idx >= 0 && IsPad(priv) && priv->oldState.proximity == ds->proximity)
 	{
 		DBG(10, priv, "Right touch wheel scroll delta = %d\n", delta);
-		sendWheelStripEvent(priv->wheel_keys[idx], ARRAY_SIZE(priv->wheel_keys[idx]),
+		sendWheelStripEvent(priv->wheel_keys[idx], ds, ARRAY_SIZE(priv->wheel_keys[idx]),
 		                    pInfo, first_val, num_vals, valuators);
 	}
 }
@@ -428,9 +486,12 @@ static void sendCommonEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	WacomDevicePtr priv = (WacomDevicePtr) pInfo->private;
 	int buttons = ds->buttons;
 
+	/* send scrolling events if necessary */
+	wcmPanscroll(priv, ds);
+
 	/* send button events when state changed or first time in prox and button unpresses */
 	if (priv->oldState.buttons != buttons || (!priv->oldState.proximity && !buttons))
-		wcmSendButtons(pInfo,buttons, first_val, num_vals, valuators);
+		wcmSendButtons(pInfo, ds, buttons, first_val, num_vals, valuators);
 
 	/* emulate wheel/strip events when defined */
 	if ( ds->relwheel || (ds->abswheel != priv->oldState.abswheel) || (ds->abswheel2 != priv->oldState.abswheel2) ||
@@ -526,7 +587,7 @@ wcmSendPadEvents(InputInfoPtr pInfo, const WacomDeviceState* ds,
 	else
 	{
 		if (priv->oldState.buttons)
-			wcmSendButtons(pInfo, ds->buttons, first_val, num_vals, valuators);
+			wcmSendButtons(pInfo, ds, ds->buttons, first_val, num_vals, valuators);
 	}
 
 	if (priv->oldState.proximity && !ds->proximity)
@@ -568,7 +629,8 @@ wcmSendNonPadEvents(InputInfoPtr pInfo, const WacomDeviceState *ds,
 						VCOPY(valuators, num_vals));
 
 		/* Move the cursor to where it should be before sending button events */
-		if(!(priv->flags & BUTTONS_ONLY_FLAG))
+		if(!(priv->flags & BUTTONS_ONLY_FLAG) &&
+		   !(priv->flags & SCROLLMODE_FLAG && priv->oldState.buttons & 1))
 		{
 			xf86PostMotionEventP(pInfo->dev, is_absolute(pInfo),
 					     first_val, num_vals,
@@ -594,7 +656,7 @@ wcmSendNonPadEvents(InputInfoPtr pInfo, const WacomDeviceState *ds,
 		/* reports button up when the device has been
 		 * down and becomes out of proximity */
 		if (priv->oldState.buttons)
-			wcmSendButtons(pInfo, buttons, first_val, num_vals, valuators);
+			wcmSendButtons(pInfo, ds, buttons, first_val, num_vals, valuators);
 
 		if (priv->oldState.proximity)
 			xf86PostProximityEventP(pInfo->dev, 0, first_val, num_vals,
@@ -649,6 +711,10 @@ void wcmSendEvents(InputInfoPtr pInfo, const WacomDeviceState* ds)
 		tx = ds->stripx;
 		ty = ds->stripy;
 	}
+
+	/* cancel panscroll */
+	if (!ds->proximity)
+		priv->flags &= ~SCROLLMODE_FLAG;
 
 	DBG(7, priv, "[%s] o_prox=%s x=%d y=%d z=%d "
 		"b=%s b=%d tx=%d ty=%d wl=%d wl2=%d rot=%d th=%d\n",
@@ -897,15 +963,12 @@ static Bool check_arbitrated_control(InputInfoPtr pInfo, WacomDeviceStatePtr ds)
 void wcmEvent(WacomCommonPtr common, unsigned int channel,
 	const WacomDeviceState* pState)
 {
-	WacomDeviceState* pLast;
 	WacomDeviceState ds;
 	WacomChannelPtr pChannel;
-	enum WacomSuppressMode suppress;
 	InputInfoPtr pInfo;
 	WacomToolPtr tool;
 	WacomDevicePtr priv;
 	pChannel = common->wcmChannel + channel;
-	pLast = &pChannel->valid.state;
 
 	DBG(10, common, "channel = %d\n", channel);
 
@@ -962,21 +1025,6 @@ void wcmEvent(WacomCommonPtr common, unsigned int channel,
 		ds.tilty = 0;
 	}
 
-	/* Optionally filter values only while in proximity */
-	if (ds.proximity && ds.device_type != PAD_ID)
-	{
-		/* Start filter fresh when entering proximity */
-		if (!pLast->proximity)
-			wcmResetSampleCounter(pChannel);
-
-		wcmFilterCoord(common,pChannel,&ds);
-	}
-
-	/* skip event if we don't have enough movement */
-	suppress = wcmCheckSuppress(common, pLast, &ds);
-	if (suppress == SUPPRESS_ALL)
-		return;
-
 	/* JEJ - Do not move this code without discussing it with me.
 	 * The device state is invariant of any filtering performed below.
 	 * Changing the device state after this point can and will cause
@@ -1021,7 +1069,7 @@ void wcmEvent(WacomCommonPtr common, unsigned int channel,
 	/* For touch, only first finger moves the cursor */
 	if ((common->wcmTouch && ds.device_type == TOUCH_ID && ds.serial_num == 1) ||
 	    (ds.device_type != TOUCH_ID))
-		commonDispatchDevice(pInfo, pChannel, suppress);
+		commonDispatchDevice(pInfo, pChannel);
 }
 
 
@@ -1056,7 +1104,7 @@ rebasePressure(const WacomDevicePtr priv, const WacomDeviceState *ds)
 
 /**
  * Instead of reporting the raw pressure, we normalize
- * the pressure from 0 to FILTER_PRESSURE_RES. This is
+ * the pressure from 0 to maxCurve. This is
  * mainly to deal with the case where heavily used
  * stylus may have a "pre-loaded" initial pressure. To
  * do so, we keep the in-prox pressure and subtract it
@@ -1081,14 +1129,14 @@ normalizePressure(const WacomDevicePtr priv, const int raw_pressure)
 		p -= priv->minPressure;
 		range_left -= priv->minPressure;
 	}
-	/* normalize pressure to 0..FILTER_PRESSURE_RES */
+	/* normalize pressure to 0..maxCurve */
 	if (range_left >= 1)
 		pressure = xf86ScaleAxis(p,
-					 FILTER_PRESSURE_RES, 0,
+					 priv->maxCurve, 0,
 					 range_left,
 					 0);
 	else
-		pressure = FILTER_PRESSURE_RES;
+		pressure = priv->maxCurve;
 
 	return (int)pressure;
 }
@@ -1117,8 +1165,8 @@ setPressureButton(const WacomDevicePtr priv, int buttons, const int pressure)
 		{
 			/* don't set it off if it is within the tolerance
 			   and threshold is larger than the tolerance */
-			if ((common->wcmThreshold > THRESHOLD_TOLERANCE) &&
-			    (pressure > common->wcmThreshold - THRESHOLD_TOLERANCE))
+			if ((common->wcmThreshold > (priv->maxCurve * THRESHOLD_TOLERANCE)) &&
+			    (pressure > common->wcmThreshold - (priv->maxCurve * THRESHOLD_TOLERANCE)))
 				buttons |= button;
 		}
 	}
@@ -1168,13 +1216,13 @@ static void detectPressureIssue(WacomDevicePtr priv,
 }
 
 static void commonDispatchDevice(InputInfoPtr pInfo,
-				 const WacomChannelPtr pChannel,
-				 enum WacomSuppressMode suppress)
+				 const WacomChannelPtr pChannel)
 {
 	WacomDeviceState* ds = &pChannel->valid.states[0];
 	WacomDevicePtr priv = pInfo->private;
 	WacomCommonPtr common = priv->common;
 	WacomDeviceState filtered;
+	enum WacomSuppressMode suppress;
 	int raw_pressure = 0;
 
 	/* device_type should have been retrieved and set in the respective
@@ -1250,6 +1298,30 @@ static void commonDispatchDevice(InputInfoPtr pInfo,
 		}
 		filtered.pressure = applyPressureCurve(priv,&filtered);
 	}
+
+	/* Optionally filter values only while in proximity */
+	if (filtered.proximity && filtered.device_type != PAD_ID)
+	{
+		/* Start filter fresh when entering proximity */
+		if (!priv->oldState.proximity)
+			wcmResetSampleCounter(pChannel);
+
+		/* Reset filter whenever the tip is touched to the
+		 * screen to ensure clicks are sent from the pen's
+		 * actual position. Don't reset on other buttons or
+		 * tip-up, or else there may be a noticible jump/
+		 * hook produced in the middle/end of the stroke.
+		 */
+		if ((filtered.buttons & PRESSURE_BUTTON) && !(priv->oldState.buttons & PRESSURE_BUTTON))
+			wcmResetSampleCounter(pChannel);
+
+		wcmFilterCoord(common,pChannel,&filtered);
+	}
+
+	/* skip event if we don't have enough movement */
+	suppress = wcmCheckSuppress(common, &priv->oldState, &filtered);
+	if (suppress == SUPPRESS_ALL)
+		return;
 
 	/* Store cursor hardware prox for next use */
 	if (IsCursor(priv))
@@ -1350,11 +1422,21 @@ int wcmInitTablet(InputInfoPtr pInfo, const char* id, float version)
 	if (common->wcmThreshold <= 0 && IsPen(priv))
 	{
 		/* Threshold for counting pressure as a button */
-		common->wcmThreshold = DEFAULT_THRESHOLD;
+		common->wcmThreshold = priv->maxCurve * DEFAULT_THRESHOLD;
 
 		xf86Msg(X_PROBED, "%s: using pressure threshold of %d for button 1\n",
 			pInfo->name, common->wcmThreshold);
 	}
+
+	/* Calculate default panscroll threshold if not set */
+	xf86Msg(X_CONFIG, "%s: panscroll is %d\n", pInfo->name, common->wcmPanscrollThreshold);
+	if (common->wcmPanscrollThreshold < 1) {
+		common->wcmPanscrollThreshold = common->wcmResolY * 13 / 1000; /* 13mm */
+	}
+	if (common->wcmPanscrollThreshold < 1) {
+		common->wcmPanscrollThreshold = 1000;
+	}
+	xf86Msg(X_CONFIG, "%s: panscroll modified to %d\n", pInfo->name, common->wcmPanscrollThreshold);
 
 	/* output tablet state as probed */
 	if (IsPen(priv))
@@ -1401,7 +1483,7 @@ static int applyPressureCurve(WacomDevicePtr pDev, const WacomDeviceStatePtr pSt
 	/* clip the pressure */
 	int p = max(0, pState->pressure);
 
-	p = min(FILTER_PRESSURE_RES, p);
+	p = min(pDev->maxCurve, p);
 
 	/* apply pressure curve function */
 	if (pDev->pPressCurve == NULL)
@@ -1468,6 +1550,7 @@ WacomCommonPtr wcmNewCommon(void)
 			/* transmit position if increment is superior */
 	common->wcmRawSample = DEFAULT_SAMPLES;
 			/* number of raw data to be used to for filtering */
+	common->wcmPanscrollThreshold = 0;
 	common->wcmPressureRecalibration = 1;
 	return common;
 }

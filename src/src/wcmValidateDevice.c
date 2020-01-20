@@ -199,9 +199,16 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 	{
 		case 0xF8:  /* Cintiq 24HDT */
 		case 0xF4:  /* Cintiq 24HD */
-			TabletSetFeature(priv->common, WCM_DUALRING | WCM_LCD);
+			TabletSetFeature(priv->common, WCM_DUALRING);
 			/* fall through */
 
+		case 0x34D: /* MobileStudio Pro 13 */
+		case 0x34E: /* MobileStudio Pro 13 */
+			TabletSetFeature(priv->common, WCM_LCD);
+			/* fall through */
+
+		case 0x357: /* Intuos Pro 2 M */
+		case 0x358: /* Intuos Pro 2 L */
 		case 0x314: /* Intuos Pro S */
 		case 0x315: /* Intuos Pro M */
 		case 0x317: /* Intuos Pro L */
@@ -298,17 +305,38 @@ int wcmDeviceTypeKeys(InputInfoPtr pInfo)
 		case 0xED: /* TPC with 1FGT */
 		case 0x90: /* TPC */
 		case 0x97: /* TPC */
+		case 0x9F: /* TPC */
 		case 0xEF: /* TPC */
 			TabletSetFeature(priv->common, WCM_TPC);
 			break;
 
-		case 0x9F:
+		case 0x304:/* Cintiq 13HD */
+		case 0x32B:/* Cintiq 27QHDT Pen */
+		case 0x34F:/* Cintiq Pro 13 FHD */
+		case 0x350:/* Cintiq Pro 16 UHD */
+		case 0x351:/* Cintiq Pro 24 */
+		case 0x352:/* Cintiq Pro 32 */
+		case 0x37C:/* Cintiq Pro 24 Pen-Only */
+			TabletSetFeature(priv->common, WCM_ROTATION);
+			/* fall-through */
+
 		case 0xF6: /* Cintiq 24HDT Touch */
 		case 0x57: /* DTK2241 */
 		case 0x59: /* DTH2242 Pen */
 		case 0x5D: /* DTH2242 Touch */
 		case 0x5E: /* Cintiq 22HDT Touch */
-		case 0x304:/* Cintiq 13HD */
+		case 0x32C:/* Cintiq 27QHDT Touch */
+		case 0x34A:/* MobileStudio Pro 13 Touch */
+		case 0x34B:/* MobileStudio Pro 16 Touch */
+		case 0x353:/* Cintiq Pro 13 FHD Touch */
+		case 0x354:/* Cintiq Pro 13 UHD Touch */
+		case 0x355:/* Cintiq Pro 24 Touch */
+		case 0x356:/* Cintiq Pro 32 Touch */
+		case 0x35A:/* DTH-1152*/
+		case 0x368:/* DTH-1152 Touch */
+		case 0x382:/* DTK-2451 */
+		case 0x37D:/* DTH-2452 */
+		case 0x37E:/* DTH-2452 Touch */
 			TabletSetFeature(priv->common, WCM_LCD);
 			break;
 	}
@@ -867,6 +895,11 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 	}
 	free(s);
 
+	if (xf86SetBoolOption(pInfo->options, "Pressure2K", 0)) {
+		xf86Msg(X_CONFIG, "%s: Using 2K pressure levels\n", pInfo->name);
+		priv->maxCurve = 2048;
+	}
+
 	/*Serials of tools we want hotpluged*/
 	if (wcmParseSerials (pInfo) != 0)
 		goto error;
@@ -888,6 +921,9 @@ Bool wcmPreInitParseOptions(InputInfoPtr pInfo, Bool is_primary,
 
 	tool = priv->tool;
 	tool->serial = priv->serial;
+
+	common->wcmPanscrollThreshold = xf86SetIntOption(pInfo->options, "PanScrollThreshold",
+			common->wcmPanscrollThreshold);
 
 	/* The first device doesn't need to add any tools/areas as it
 	 * will be the first anyway. So if different, add tool
